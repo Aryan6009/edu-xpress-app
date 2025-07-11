@@ -1,0 +1,14 @@
+ <resources>
+    <!-- Theme for splash screen -->
+    <style name="LaunchTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+
+    <!-- Theme used while Flutter initializes -->
+    <style name="NormalTheme" parent="Theme.AppCompat.Light.NoActionBar">
+        <item name="android:windowBackground">?android:colorBackground</item>
+    </style>
+
+    <!-- Razorpay WebView theme -->
+    <style name="CheckoutTheme" parent="Theme.AppCompat.Light.NoActionBar" />
+</resources>
