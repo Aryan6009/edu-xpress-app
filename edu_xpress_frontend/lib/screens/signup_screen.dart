@@ -32,7 +32,7 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
 
     try {
       final res = await http.post(
-        Uri.parse("http://192.168.117.237:5000/register"),
+        Uri.parse("http://10.50.236.237:5000/register"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"username": name, "email": email, "password": password}),
       );
@@ -66,7 +66,7 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.orange.shade50,
+      backgroundColor: Theme.of(context).cardColor,
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 60),
         child: Column(
@@ -118,7 +118,7 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
                 minimumSize: const Size.fromHeight(50),
               ),
               child: loading
-                  ? const CircularProgressIndicator(color: Colors.white)
+                  ? CircularProgressIndicator(color: Theme.of(context).cardColor)
                   : const Text("Sign Up", style: TextStyle(fontSize: 18)),
             ),
             const SizedBox(height: 10),

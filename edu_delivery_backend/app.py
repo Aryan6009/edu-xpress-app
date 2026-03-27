@@ -7,8 +7,22 @@ import hmac
 import hashlib
 import re
 from flask_cors import CORS
+from flask_admin import Admin
+import os
+from werkzeug.utils import secure_filename
+from flask_admin.form import ImageUploadField
+from flask_admin.contrib.sqla import ModelView
+from wtforms import form
+from flask import send_from_directory
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'edu-xpress-admin-secret'
+@app.route('/uploads/<path:filename>')
+def uploaded_file(filename):
+    return send_from_directory(os.path.join(os.getcwd(), 'uploads'), filename)
+
+UPLOAD_FOLDER = 'uploads/product_images'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 CORS(app)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///edu_delivery.db'
@@ -19,6 +33,7 @@ RAZORPAY_KEY_ID = "rzp_test_FTDi97Hi0qWYoH"
 RAZORPAY_KEY_SECRET = "sH1d9ewGnTKdTivFyV4k5dwZ"
 
 db = SQLAlchemy(app)
+admin = Admin(app, name='Edu-Xpress Admin')
 jwt = JWTManager(app)
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
@@ -29,6 +44,8 @@ class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=False)
+    image = db.Column(db.String(200))
+    category = db.Column(db.String(50), default="General")
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -80,9 +97,30 @@ def add_sample_products():
 
 @app.route('/products', methods=['GET'])
 def get_products():
-    products = Product.query.all()
-    product_list = [{"id": p.id, "name": p.name, "price": p.price} for p in products]
+    products = Product.query.order_by(Product.id.desc()).all()
+
+    product_list = []
+
+    for p in products:
+
+        image_url = None
+        if p.image:
+            image_url = f"http://10.227.183.237:5000/{p.image}"
+
+        product_list.append({
+            "id": p.id,
+            "name": p.name,
+            "price": p.price,
+            "category": p.category,
+            "image": image_url
+        })
+
     return jsonify(product_list)
+
+@app.route('/categories')
+def get_categories():
+    categories = db.session.query(Product.category).distinct().all()
+    return jsonify([c[0] for c in categories if c[0]])
 
 @app.route('/register', methods=['POST'])
 def register():
@@ -158,24 +196,72 @@ def add_to_cart():
     db.session.commit()
     return jsonify({"message": "Item added to cart"}), 201
 
+@app.route('/cart/decrease/<int:product_id>', methods=['POST'])
+@jwt_required()
+def decrease_cart_item(product_id):
+
+    user_id = int(get_jwt_identity())
+
+    cart_item = Cart.query.filter_by(
+        user_id=user_id,
+        product_id=product_id
+    ).first()
+
+    if not cart_item:
+        return jsonify({"error": "Item not found"}), 404
+
+    if cart_item.quantity > 1:
+        cart_item.quantity -= 1
+    else:
+        db.session.delete(cart_item)
+
+    db.session.commit()
+
+    return jsonify({"message": "Cart updated"})
+
 @app.route('/cart', methods=['GET'])
 @jwt_required()
 def view_cart():
     user_id = int(get_jwt_identity())
     cart_items = Cart.query.filter_by(user_id=user_id).all()
-    items = [{"id": item.id, "product_name": item.product_name, "price": item.price, "quantity": item.quantity} for item in cart_items]
+
+    items = []
+
+    for item in cart_items:
+        product = Product.query.get(item.product_id)
+
+        image_url = None
+        if product and product.image:
+            image_url = f"http://10.227.183.237:5000/{product.image}"
+
+        items.append({
+            "id": item.id,
+            "product_id": item.product_id,
+            "product_name": item.product_name,
+            "price": item.price,
+            "quantity": item.quantity,
+            "image": image_url
+        })
+
     return jsonify({"cart": items})
 
-@app.route('/cart/remove/<int:item_id>', methods=['DELETE'])
+@app.route('/cart/remove/<int:product_id>', methods=['DELETE'])
 @jwt_required()
-def remove_item_from_cart(item_id):
+def remove_item_from_cart(product_id):
+
     user_id = int(get_jwt_identity())
-    cart_item = Cart.query.filter_by(id=item_id, user_id=user_id).first()
+
+    cart_item = Cart.query.filter_by(
+        user_id=user_id,
+        product_id=product_id
+    ).first()
+
     if not cart_item:
-        return jsonify({"error": "Item not found in Cart!"}), 404
+        return jsonify({"error": "Item not found"}), 404
 
     db.session.delete(cart_item)
     db.session.commit()
+
     return jsonify({"message": "Item removed from cart"})
 
 @app.route('/orders', methods=['GET'])
@@ -205,7 +291,13 @@ def search_products():
         return jsonify({"error": "Please provide a search item"}), 404
 
     products = Product.query.filter(Product.name.ilike(f"%{query}%")).all()
-    product_list = [{"id": p.id, "name": p.name, "price": p.price} for p in products]
+    product_list = [{
+    "id": p.id,
+    "name": p.name,
+    "price": p.price,
+    "category": p.category,
+    "image": f"http://10.227.183.237:5000/{p.image}" if p.image else None
+} for p in products]
     return jsonify(product_list)
 
 @app.route('/create_order', methods=['POST'])
@@ -284,6 +376,23 @@ def verify_payment():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    
+class ProductAdmin(ModelView):
+
+    column_list = ['name', 'price', 'category', 'image']
+    form_columns = ['name', 'price', 'category', 'image']
+
+    form_extra_fields = {
+        'image': ImageUploadField(
+            'Product Image',
+            base_path=os.path.join(os.getcwd(), 'uploads/product_images'),
+            relative_path='product_images/'
+        )
+    }
+    
+admin.add_view(ModelView(User, db.session))
+admin.add_view(ProductAdmin(Product, db.session))
+admin.add_view(ModelView(Order, db.session))
 
 
 if __name__ == '__main__':

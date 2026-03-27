@@ -19,7 +19,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query.trim().isEmpty) return;
 
     setState(() => isLoading = true);
-    final res = await http.get(Uri.parse('http://192.168.117.237:5000/search?q=$query'));
+    final res = await http.get(Uri.parse('http://10.50.236.237:5000/search?q=$query'));
     final data = jsonDecode(res.body);
 
     setState(() {
@@ -31,7 +31,7 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF4E6),
+      backgroundColor: Theme.of(context).cardColor,
       appBar: AppBar(
         title: const Text("Search Books"),
         backgroundColor: Colors.deepOrange,
@@ -46,7 +46,7 @@ class _SearchScreenState extends State<SearchScreen> {
               decoration: InputDecoration(
                 hintText: "Search for a book...",
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: Theme.of(context).cardColor,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: IconButton(
                   icon: const Icon(Icons.clear),

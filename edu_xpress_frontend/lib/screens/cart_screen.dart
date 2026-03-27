@@ -5,7 +5,6 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:lottie/lottie.dart';
-import '../widgets/navigation_drawer.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -20,7 +19,7 @@ class _CartScreenState extends State<CartScreen> {
   late Razorpay _razorpay;
   bool loading = true;
 
-  final String baseUrl = "http://192.168.117.237:5000"; 
+  final String baseUrl = "http://10.50.236.237:5000"; 
 
   @override
   void initState() {
@@ -204,74 +203,111 @@ class _CartScreenState extends State<CartScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF3E0),
+   backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text("Your Cart"),
         backgroundColor: Colors.deepOrange,
       ),
-      drawer: const AppDrawer(),
-      body: loading
-          ? const Center(child: CircularProgressIndicator(color: Colors.deepOrange))
-          : cart.isEmpty
-              ? Center(child: Lottie.asset("assets/empty_cart.json", height: 220))
-              : Column(
-                  children: [
-                    Expanded(
-                      child: ListView.builder(
-                        itemCount: cart.length,
-                        itemBuilder: (context, index) {
-                          final item = cart[index];
-                          return Card(
-                            margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            child: ListTile(
-                              leading: const Icon(Icons.book, color: Colors.deepOrange),
-                              title: Text(item['product_name']),
-                              subtitle: Text("₹ ${item['price']} x ${item['quantity']}"),
-                              trailing: IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => removeItem(item['id']),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.all(16),
+    body: loading
+    ? const Center(
+        child: CircularProgressIndicator(color: Colors.deepOrange),
+      )
+    : cart.isEmpty
+        ? Center(
+            child: Lottie.asset("assets/empty_cart.json", height: 220),
+          )
+        : Column(
+            children: [
+              Expanded(
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: cart.length,
+                  itemBuilder: (context, index) {
+                    final item = cart[index];
+
+                    return Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.orange.shade100,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(20),
-                          topRight: Radius.circular(20),
-                        ),
-                      ),
-                      child: Column(
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text("Total Amount:",
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              Text("₹ $totalAmount",
-                                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                          const SizedBox(height: 12),
-                          ElevatedButton.icon(
-                            onPressed: initiatePayment,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: Colors.deepOrange,
-                              minimumSize: const Size.fromHeight(45),
-                            ),
-                            icon: const Icon(Icons.payment),
-                            label: const Text("Pay with Razorpay", style: TextStyle(fontSize: 16)),
-                          ),
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: const [
+                          BoxShadow(
+                            blurRadius: 6,
+                            color: Colors.black12,
+                            offset: Offset(0, 3),
+                          )
                         ],
                       ),
-                    )
-                  ],
+                      child: ListTile(
+                        leading: const Icon(
+                          Icons.menu_book,
+                          color: Colors.deepOrange,
+                          size: 32,
+                        ),
+                        title: Text(
+                          item['product_name'],
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          "₹${item['price']} • Qty ${item['quantity']}",
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () => removeItem(item['product_id'])
+                        ),
+                      ),
+                    );
+                  },
                 ),
+              ),
+            ],
+          ),
+                
+      bottomNavigationBar: Container(
+  padding: const EdgeInsets.all(16),
+  decoration: BoxDecoration(
+    color: Theme.of(context).colorScheme.surface,
+    boxShadow: const [
+      BoxShadow(
+        blurRadius: 10,
+        color: Colors.black12,
+        offset: Offset(0, -2),
+      )
+    ],
+  ),
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Total",
+            style: TextStyle(fontSize: 14),
+          ),
+          Text(
+            "₹${totalAmount.toStringAsFixed(0)}",
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.deepOrange,
+            ),
+          ),
+        ],
+      ),
+      ElevatedButton(
+        onPressed: initiatePayment,
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 30,
+            vertical: 14,
+          ),
+        ),
+        child: const Text("Checkout"),
+      )
+    ],
+  ),
+),
     );
   }
 }

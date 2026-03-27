@@ -21,7 +21,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     String? token = prefs.getString("token");
 
     final res = await http.get(
-      Uri.parse("http://192.168.117.237:5000/orders"),
+      Uri.parse("http://10.227.183.237:5000/orders"),
       headers: {"Authorization": "Bearer $token"},
     );
 
@@ -46,7 +46,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF4E6),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text("Your Orders"),
         backgroundColor: Colors.deepOrange,
