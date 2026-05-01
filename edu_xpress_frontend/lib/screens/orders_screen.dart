@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
+import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -21,7 +22,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
     String? token = prefs.getString("token");
 
     final res = await http.get(
-      Uri.parse("http://10.227.183.237:5000/orders"),
+      Uri.parse("http://10.46.51.170:5000/orders"),
       headers: {"Authorization": "Bearer $token"},
     );
 
@@ -79,6 +80,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     );
                   },
                 ),
+      floatingActionButton: const ChatBotFAB(),
     );
   }
 }

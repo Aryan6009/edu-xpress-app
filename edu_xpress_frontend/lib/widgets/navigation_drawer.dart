@@ -8,6 +8,7 @@ class AppDrawer extends StatelessWidget {
   void logout(BuildContext context) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+    if (!context.mounted) return;
     Navigator.pushReplacementNamed(context, "/login");
   }
 
@@ -57,6 +58,11 @@ class AppDrawer extends StatelessWidget {
             leading: const Icon(Icons.person, color: Colors.deepOrange),
             title: const Text('Profile'),
             onTap: () => Navigator.pushReplacementNamed(context, "/profile"),
+          ),
+          ListTile(
+            leading: const Icon(Icons.chat, color: Colors.deepOrange),
+            title: const Text('Chat with AI'),
+            onTap: () => Navigator.pushReplacementNamed(context, "/chat"),
           ),
           const Divider(thickness: 1),
           ListTile(

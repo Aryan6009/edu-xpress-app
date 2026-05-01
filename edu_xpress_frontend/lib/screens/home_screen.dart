@@ -4,8 +4,9 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
 
-const String baseUrl = "http://10.50.236.237:5000";
+const String baseUrl = "http://10.46.51.170:5000";
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
   @override
@@ -546,5 +547,6 @@ const SizedBox(height: 16),
     BottomNavigationBarItem(icon: Icon(Icons.receipt_long), label: "Orders"),
   ],
 ),
+floatingActionButton: const ChatBotFAB(),
     );
   }}

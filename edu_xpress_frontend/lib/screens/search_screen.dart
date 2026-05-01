@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:lottie/lottie.dart';
+import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -19,7 +20,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query.trim().isEmpty) return;
 
     setState(() => isLoading = true);
-    final res = await http.get(Uri.parse('http://10.50.236.237:5000/search?q=$query'));
+    final res = await http.get(Uri.parse('http://10.46.51.170:5000/search?q=$query'));
     final data = jsonDecode(res.body);
 
     setState(() {
@@ -83,6 +84,7 @@ class _SearchScreenState extends State<SearchScreen> {
             )
         ],
       ),
+      floatingActionButton: const ChatBotFAB(),
     );
   }
 }

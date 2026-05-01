@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+instance/
+*.db
+
+# Flutter
+build/
+.dart_tool/
+.pub-cache/
+
+# OS
+.DS_Store
+Thumbs.db

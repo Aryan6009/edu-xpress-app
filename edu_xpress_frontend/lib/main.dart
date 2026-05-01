@@ -7,6 +7,7 @@ import 'package:edu_xpress_frontend/screens/cart_screen.dart';
 import 'package:edu_xpress_frontend/screens/orders_screen.dart';
 import 'package:edu_xpress_frontend/screens/search_screen.dart';
 import 'package:edu_xpress_frontend/screens/profile_screen.dart';
+import 'package:edu_xpress_frontend/screens/chat_screen.dart';
 
 void main() {
   runApp(const EduXpressApp());
@@ -107,6 +108,7 @@ darkTheme: ThemeData(
     '/cart': (context) => const CartScreen(),
     '/orders': (context) => const OrdersScreen(),
     '/search': (context) => const SearchScreen(),
+    '/chat': (context) => const ChatScreen(),
 
     '/profile': (context) => ProfileScreen(
       toggleTheme: toggleTheme,

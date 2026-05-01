@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Function(bool) toggleTheme;
@@ -27,7 +28,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String? token = prefs.getString("token");
 
     final res = await http.get(
-      Uri.parse("http://10.50.236.237:5000/profile"),
+      Uri.parse("http://10.46.51.170:5000/profile"),
       headers: {"Authorization": "Bearer $token"},
     );
 
@@ -43,6 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> logout() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.clear();
+    if (!mounted) return;
     Navigator.pushReplacementNamed(context, "/login");
   }
 
@@ -235,6 +237,7 @@ listItem(Icons.card_giftcard_outlined, "Rewards", () {}),
                 ),
               ),
             ),
+      floatingActionButton: const ChatBotFAB(),
     );
   }
 }
