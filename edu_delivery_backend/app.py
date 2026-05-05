@@ -10,6 +10,7 @@ from flask_admin import Admin
 from flask_admin.form import ImageUploadField
 from flask_admin.contrib.sqla import ModelView
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired
+from dotenv import load_dotenv
 import razorpay
 import hmac
 import hashlib
@@ -17,24 +18,27 @@ import re
 import os
 import google.generativeai as genai
 
+# Load environment variables
+load_dotenv()
+
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'edu-xpress-admin-secret'
-app.config['SECURITY_PASSWORD_SALT'] = 'edu-xpress-salt'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'edu-xpress-default-secret')
+app.config['SECURITY_PASSWORD_SALT'] = os.getenv('SECURITY_PASSWORD_SALT', 'edu-xpress-default-salt')
 
 # --- Configuration ---
 UPLOAD_FOLDER = 'uploads/product_images'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///edu_delivery.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///edu_delivery_v2.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['JWT_SECRET_KEY'] = 'jontheaegon'
+app.config['JWT_SECRET_KEY'] = os.getenv('JWT_SECRET_KEY', 'jontheaegon')
 
-# Mail Configuration (Placeholders - Replace with real SMTP details)
+# Mail Configuration
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'aryan765208@gmail.com'
-app.config['MAIL_PASSWORD'] = 'cyxo ndjb jhxu zchf'
-app.config['MAIL_DEFAULT_SENDER'] = 'aryan765208@gmail.com'
+app.config['MAIL_USERNAME'] = os.getenv('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.getenv('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_DEFAULT_SENDER')
 
 # --- Initialize Extensions ---
 db = SQLAlchemy(app)
@@ -48,19 +52,19 @@ admin = Admin(app, name='Edu-Xpress Admin')
 limiter = Limiter(
     get_remote_address,
     app=app,
-    default_limits=["200 per day", "50 per hour"]
+    default_limits=["1000 per day", "500 per hour"]
 )
 
 # Serializer for Email Verification Tokens
 ts = URLSafeTimedSerializer(app.config["SECRET_KEY"])
 
 # Razorpay
-RAZORPAY_KEY_ID = "rzp_test_FTDi97Hi0qWYoH"
-RAZORPAY_KEY_SECRET = "sH1d9ewGnTKdTivFyV4k5dwZ"
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # Gemini AI
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
@@ -103,19 +107,123 @@ class Product(db.Model):
     price = db.Column(db.Float, nullable=False)
     image = db.Column(db.String(200))
     category = db.Column(db.String(50), default="General")
-
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), nullable=False, unique=True)
-    email = db.Column(db.String(100), nullable=False, unique=True)
-    password = db.Column(db.String(100), nullable=False)
-    is_verified = db.Column(db.Boolean, default=False) # New
+    email = db.Column(db.String(100), nullable=True, unique=True) # Email can be null for phone users
+    password = db.Column(db.String(100), nullable=True) # Password can be null for social/phone users
+    phone_number = db.Column(db.String(15), nullable=True, unique=True)
+    google_id = db.Column(db.String(100), nullable=True, unique=True)
+    is_verified = db.Column(db.Boolean, default=False)
 
     def set_password(self, password):
-        self.password = bcrypt.generate_password_hash(password).decode('utf-8')
+        if password:
+            self.password = bcrypt.generate_password_hash(password).decode('utf-8')
 
     def check_password(self, password):
-        return bcrypt.check_password_hash(self.password, password)
+        if self.password:
+            return bcrypt.check_password_hash(self.password, password)
+        return False
+
+# Temporary storage for OTPs (In-memory, use Redis for production)
+otp_storage = {}
+
+# --- Auth Routes ---
+
+from google.oauth2 import id_token
+from google.auth.transport import requests as google_requests
+
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
+
+@app.route('/google-login', methods=['POST'])
+def google_login():
+    data = request.get_json()
+    token = data.get('id_token')
+
+    if not token:
+        return jsonify({"error": "No token provided"}), 400
+
+    try:
+        # Verify the token
+        idinfo = id_token.verify_oauth2_token(token, google_requests.Request(), GOOGLE_CLIENT_ID)
+
+        # ID token is valid. Get the user's Google ID from the decoded token.
+        userid = idinfo['sub']
+        email = idinfo.get('email')
+        name = idinfo.get('name', 'Google User')
+
+        # Check if user exists
+        user = User.query.filter_by(google_id=userid).first()
+        if not user:
+            # Check if user with same email exists
+            user = User.query.filter_by(email=email).first()
+            if user:
+                user.google_id = userid
+            else:
+                # Create new user
+                user = User(
+                    username=f"{name}_{userid[:5]}",
+                    email=email,
+                    google_id=userid,
+                    is_verified=True
+                )
+                db.session.add(user)
+            db.session.commit()
+
+        access_token = create_access_token(identity=str(user.id))
+        return jsonify({"access_token": access_token}), 200
+
+    except ValueError:
+        # Invalid token
+        return jsonify({"error": "Invalid token"}), 400
+
+@app.route('/send-otp', methods=['POST'])
+def send_otp():
+    data = request.get_json()
+    phone = data.get('phone')
+
+    if not phone:
+        return jsonify({"error": "Phone number required"}), 400
+
+    # Generate a 6-digit OTP
+    import random
+    otp = str(random.randint(100000, 999999))
+    otp_storage[phone] = otp
+
+    # In a real app, send SMS here. For now, print to console.
+    print(f"--- OTP for {phone}: {otp} ---")
+
+    return jsonify({"message": "OTP sent successfully"}), 200
+
+@app.route('/mobile-login', methods=['POST'])
+def mobile_login():
+    data = request.get_json()
+    phone = data.get('phone')
+    otp = data.get('otp')
+
+    if not phone or not otp:
+        return jsonify({"error": "Phone and OTP required"}), 400
+
+    if otp_storage.get(phone) == otp:
+        # Success! Clear OTP
+        del otp_storage[phone]
+
+        # Check if user exists
+        user = User.query.filter_by(phone_number=phone).first()
+        if not user:
+            # Create new user
+            user = User(
+                username=f"User_{phone[-4:]}",
+                phone_number=phone,
+                is_verified=True
+            )
+            db.session.add(user)
+            db.session.commit()
+
+        access_token = create_access_token(identity=str(user.id))
+        return jsonify({"access_token": access_token}), 200
+    else:
+        return jsonify({"error": "Invalid OTP"}), 400
 
 class Cart(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -124,6 +232,14 @@ class Cart(db.Model):
     product_name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Float, nullable=False)
     quantity = db.Column(db.Integer, default=1)
+
+class Address(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    full_address = db.Column(db.String(500), nullable=False)
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    created_at = db.Column(db.DateTime, default=db.func.current_timestamp())
 
 class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -244,6 +360,53 @@ def profile():
     user_id = get_jwt_identity()
     user = User.query.get(int(user_id))
     return jsonify({"username": user.username, "email": user.email})
+
+@app.route('/save-address', methods=['POST'])
+@jwt_required()
+def save_address():
+    user_id = int(get_jwt_identity())
+    data = request.get_json()
+    
+    full_address = data.get("address")
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+    
+    if not all([full_address, lat, lng]):
+        return jsonify({"error": "Missing address details"}), 400
+        
+    new_address = Address(
+        user_id=user_id,
+        full_address=full_address,
+        latitude=lat,
+        longitude=lng
+    )
+    db.session.add(new_address)
+    db.session.commit()
+    return jsonify({"message": "Address saved successfully"}), 201
+
+@app.route('/addresses', methods=['GET'])
+@jwt_required()
+def get_addresses():
+    user_id = int(get_jwt_identity())
+    addresses = Address.query.filter_by(user_id=user_id).all()
+    return jsonify([{
+        "id": a.id,
+        "address": a.full_address,
+        "latitude": a.latitude,
+        "longitude": a.longitude
+    } for a in addresses])
+
+@app.route('/delete-address/<int:address_id>', methods=['DELETE'])
+@jwt_required()
+def delete_address(address_id):
+    user_id = int(get_jwt_identity())
+    address = Address.query.filter_by(id=address_id, user_id=user_id).first()
+    if not address:
+        return jsonify({"error": "Address not found"}), 404
+        
+    db.session.delete(address)
+    db.session.commit()
+    return jsonify({"message": "Address deleted successfully"}), 200
 
 @app.route('/cart/add', methods=['POST'])
 @jwt_required()

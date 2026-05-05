@@ -6,10 +6,11 @@ class ChatBotFAB extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return FloatingActionButton(
+      heroTag: null, // Prevent Hero transition conflicts
       onPressed: () {
         Navigator.pushNamed(context, '/chat');
       },
-      backgroundColor: const Color(0xFF7B1FA2),
+      backgroundColor: Colors.deepOrange,
       elevation: 8,
       tooltip: 'Chat with AI Assistant',
       child: Stack(

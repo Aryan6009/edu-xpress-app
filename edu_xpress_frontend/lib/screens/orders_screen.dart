@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
 import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
 
+const String baseUrl = "http://10.184.119.237:5000";
+
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
@@ -18,19 +20,37 @@ class _OrdersScreenState extends State<OrdersScreen> {
   bool loading = true;
 
   Future<void> fetchOrders() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString("token");
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString("token");
 
-    final res = await http.get(
-      Uri.parse("http://10.46.51.170:5000/orders"),
-      headers: {"Authorization": "Bearer $token"},
-    );
+      if (token == null) {
+        if (mounted) setState(() => loading = false);
+        return;
+      }
 
-    final data = jsonDecode(res.body);
-    setState(() {
-      orders = data["orders"];
-      loading = false;
-    });
+      final res = await http.get(
+        Uri.parse("$baseUrl/orders"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            orders = data["orders"] ?? [];
+            loading = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => loading = false);
+      }
+    } catch (e) {
+      debugPrint("Error fetching orders: $e");
+      if (mounted) {
+        setState(() => loading = false);
+      }
+    }
   }
 
   @override
@@ -46,11 +66,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
         title: const Text("Your Orders"),
-        backgroundColor: Colors.deepOrange,
+        backgroundColor: theme.colorScheme.primary,
       ),
       drawer: const AppDrawer(),
       body: loading

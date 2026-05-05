@@ -8,6 +8,7 @@ import 'package:edu_xpress_frontend/screens/orders_screen.dart';
 import 'package:edu_xpress_frontend/screens/search_screen.dart';
 import 'package:edu_xpress_frontend/screens/profile_screen.dart';
 import 'package:edu_xpress_frontend/screens/chat_screen.dart';
+import 'package:edu_xpress_frontend/screens/address_screen.dart';
 
 void main() {
   runApp(const EduXpressApp());
@@ -37,61 +38,96 @@ class _EduXpressAppState extends State<EduXpressApp> {
   debugShowCheckedModeBanner: false,
 
 theme: ThemeData(
+  useMaterial3: true,
   brightness: Brightness.light,
-
-  primaryColor: const Color(0xFF7B1FA2),
-
-  scaffoldBackgroundColor: Colors.white,
-
   colorScheme: ColorScheme.fromSeed(
-    seedColor: const Color(0xFF7B1FA2),
+    seedColor: Colors.deepOrange,
     brightness: Brightness.light,
+    surface: const Color(0xFFF4F7FA),
   ),
-
   appBarTheme: const AppBarTheme(
-    backgroundColor: Color(0xFF7B1FA2),
+    backgroundColor: Colors.deepOrange,
     foregroundColor: Colors.white,
     elevation: 0,
+    centerTitle: true,
   ),
-
-  cardColor: Colors.white,
-
+  cardTheme: CardThemeData(
+    color: Colors.white,
+    elevation: 2,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  ),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      backgroundColor: const Color(0xFF7B1FA2),
+      backgroundColor: Colors.deepOrange,
       foregroundColor: Colors.white,
+      minimumSize: const Size(double.infinity, 50),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
     ),
   ),
-
-  floatingActionButtonTheme: const FloatingActionButtonThemeData(
-    backgroundColor: Color(0xFF7B1FA2),
+  inputDecorationTheme: InputDecorationTheme(
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Colors.deepOrange, width: 2),
+    ),
   ),
 ),
 
 darkTheme: ThemeData(
+  useMaterial3: true,
   brightness: Brightness.dark,
-
-  scaffoldBackgroundColor: const Color(0xFF121212),
-
-  cardColor: const Color(0xFF1E1E1E),
-
   colorScheme: ColorScheme.fromSeed(
-    seedColor: const Color(0xFF7B1FA2),
+    seedColor: Colors.deepOrange,
     brightness: Brightness.dark,
+    surface: const Color(0xFF121212),
   ),
-
+  scaffoldBackgroundColor: const Color(0xFF121212),
   appBarTheme: const AppBarTheme(
-    backgroundColor: Color(0xFF7B1FA2),
+    backgroundColor: Color(0xFF1E1E1E),
     foregroundColor: Colors.white,
+    elevation: 0,
+    centerTitle: true,
   ),
-
+  cardTheme: CardThemeData(
+    color: const Color(0xFF1E1E1E),
+    elevation: 2,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  ),
   elevatedButtonTheme: ElevatedButtonThemeData(
     style: ElevatedButton.styleFrom(
-      backgroundColor: const Color(0xFF7B1FA2),
+      backgroundColor: Colors.deepOrange,
       foregroundColor: Colors.white,
+      minimumSize: const Size(double.infinity, 50),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+    ),
+  ),
+  inputDecorationTheme: InputDecorationTheme(
+    filled: true,
+    fillColor: const Color(0xFF2C2C2C),
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: BorderSide.none,
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(12),
+      borderSide: const BorderSide(color: Colors.deepOrange, width: 2),
     ),
   ),
 ),
@@ -109,6 +145,7 @@ darkTheme: ThemeData(
     '/orders': (context) => const OrdersScreen(),
     '/search': (context) => const SearchScreen(),
     '/chat': (context) => const ChatScreen(),
+    '/addresses': (context) => const AddressScreen(),
 
     '/profile': (context) => ProfileScreen(
       toggleTheme: toggleTheme,

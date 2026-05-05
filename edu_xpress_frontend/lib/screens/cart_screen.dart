@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
 
 class CartScreen extends StatefulWidget {
@@ -20,7 +21,11 @@ class _CartScreenState extends State<CartScreen> {
   bool loading = true;
   bool isUpdating = false; // Loading state for quantity updates
 
-  final String baseUrl = "http://10.46.51.170:5000";
+  final String baseUrl = "http://10.184.119.237:5000";
+  
+  // Fixed Shop Location (e.g., Hazratganj, Lucknow)
+  static const double SHOP_LAT = 26.8467;
+  static const double SHOP_LNG = 80.9462;
 
   @override
   void initState() {
@@ -33,21 +38,51 @@ class _CartScreenState extends State<CartScreen> {
   }
 
   Future<void> fetchCart() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString("token");
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString("token");
 
-    final res = await http.get(
-      Uri.parse("$baseUrl/cart"),
-      headers: {"Authorization": "Bearer $token"},
-    );
+      if (token == null) {
+        if (mounted) setState(() => loading = false);
+        return;
+      }
 
-    final data = jsonDecode(res.body);
-    setState(() {
-      cart = data["cart"] ?? [];
-      totalAmount = cart.fold(0, (sum, item) => sum + item['price'] * item['quantity']);
-      loading = false;
-      isUpdating = false;
-    });
+      final res = await http.get(
+        Uri.parse("$baseUrl/cart"),
+        headers: {"Authorization": "Bearer $token"},
+      ).timeout(const Duration(seconds: 10));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (mounted) {
+          setState(() {
+            cart = data["cart"] ?? [];
+            totalAmount = cart.fold(0.0, (sum, item) {
+              final price = double.tryParse(item['price'].toString()) ?? 0.0;
+              final quantity = int.tryParse(item['quantity'].toString()) ?? 0;
+              return sum + (price * quantity);
+            });
+            loading = false;
+            isUpdating = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+          loading = false;
+          isUpdating = false;
+        });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching cart: $e");
+      if (mounted) {
+        setState(() {
+          loading = false;
+          isUpdating = false;
+        });
+      }
+    }
   }
 
   // --- Quantity Control Actions ---
@@ -82,23 +117,30 @@ class _CartScreenState extends State<CartScreen> {
       if (response.statusCode == 200 || response.statusCode == 201) {
         fetchCart();
       } else {
+        if (!mounted) return;
         setState(() => isUpdating = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Update failed"),
+          SnackBar(
+            content: const Text("Update failed", textAlign: TextAlign.center),
             behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.deepOrange,
+            backgroundColor: Colors.black87,
+            margin: const EdgeInsets.only(bottom: 10, left: 60, right: 60),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => isUpdating = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("Error: $e"),
+          content: Text("Error: $e", textAlign: TextAlign.center),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.deepOrange,
-        ),
+          backgroundColor: Colors.black87,
+          margin: const EdgeInsets.only(bottom: 10, left: 60, right: 60),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),        ),
       );
     }
   }
@@ -115,21 +157,25 @@ class _CartScreenState extends State<CartScreen> {
 
     if (res.statusCode == 200) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("🗑️ Item removed"),
+        SnackBar(
+          content: const Text("🗑️ Item removed", textAlign: TextAlign.center),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.deepOrange,
-        ),
+          backgroundColor: Colors.black87,
+          margin: const EdgeInsets.only(bottom: 10, left: 60, right: 60),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),        ),
       );
       fetchCart();
     } else {
       setState(() => isUpdating = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("❌ Could not remove item"),
+        SnackBar(
+          content: const Text("❌ Could not remove item", textAlign: TextAlign.center),
           behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.deepOrange,
-        ),
+          backgroundColor: Colors.black87,
+          margin: const EdgeInsets.only(bottom: 10, left: 60, right: 60),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          duration: const Duration(seconds: 2),        ),
       );
     }
   }
@@ -162,18 +208,37 @@ class _CartScreenState extends State<CartScreen> {
 
   Future<void> initiatePayment() async {
     if (totalAmount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("🛒 Cart is empty!"),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.deepOrange,
-        ),
-      );
+      _showSnackBar("🛒 Cart is empty!");
       return;
     }
 
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString("token");
+    String? selectedAddr = prefs.getString("selected_address");
+    double? selectedLat = prefs.getDouble("selected_lat");
+    double? selectedLng = prefs.getDouble("selected_lng");
+
+    if (selectedAddr == null || selectedLat == null || selectedLng == null) {
+      _showSnackBar("📍 Please select a delivery address first!");
+      Navigator.pushNamed(context, "/addresses");
+      return;
+    }
+
+    // --- Distance Check (10km Radius) ---
+    double distanceInMeters = Geolocator.distanceBetween(
+      SHOP_LAT,
+      SHOP_LNG,
+      selectedLat,
+      selectedLng,
+    );
+
+    if (distanceInMeters > 10000) { // 10km
+      _showErrorDialog(
+        "Out of Delivery Range",
+        "Sorry, we only deliver within 10km of our shop. Your selected address is ${(distanceInMeters/1000).toStringAsFixed(1)}km away."
+      );
+      return;
+    }
 
     if (!mounted) return;
     showDialog(
@@ -205,55 +270,70 @@ class _CartScreenState extends State<CartScreen> {
       try {
         _razorpay.open(options);
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("❌ Could not open Razorpay"),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.deepOrange,
-          ),
-        );
+        _showSnackBar("❌ Could not open Razorpay");
       }
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("❌ Payment initiation failed"),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.deepOrange,
-        ),
-      );
+      _showSnackBar("❌ Payment initiation failed");
     }
   }
 
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, textAlign: TextAlign.center),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.black87,
+        margin: const EdgeInsets.only(bottom: 10, left: 60, right: 60),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _showErrorDialog(String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title, style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+        content: Text(message),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("OK")),
+        ],
+      ),
+    );
+  }
+
   void _onPaymentSuccess(PaymentSuccessResponse response) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString("token");
+    String savedAddr = prefs.getString("selected_address") ?? "";
+
     TextEditingController nameController = TextEditingController();
     TextEditingController phoneController = TextEditingController();
-    TextEditingController addressController = TextEditingController();
+    TextEditingController addressController = TextEditingController(text: savedAddr);
 
     if (!mounted) return;
     await showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        title: const Text("Delivery Details"),
+        title: const Text("Confirm Delivery Details"),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(controller: nameController, decoration: const InputDecoration(labelText: "Full Name")),
             TextField(controller: phoneController, decoration: const InputDecoration(labelText: "Phone")),
-            TextField(controller: addressController, decoration: const InputDecoration(labelText: "Address")),
+            TextField(controller: addressController, decoration: const InputDecoration(labelText: "Delivery Address"), maxLines: 2),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Submit"),
+            child: const Text("Confirm & Place Order"),
           ),
         ],
       ),
     );
-
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String? token = prefs.getString("token");
 
     final res = await http.post(
       Uri.parse("$baseUrl/verify_payment"),
@@ -273,42 +353,34 @@ class _CartScreenState extends State<CartScreen> {
 
     if (!mounted) return;
     if (res.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Payment successful and order placed!"),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.deepOrange,
-        ),
-      );
+      _showSnackBar("🎉 Payment successful and order placed!");
       Navigator.pushReplacementNamed(context, "/orders");
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Payment verification failed"),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Colors.deepOrange,
-        ),
-      );
+      _showSnackBar("❌ Payment verification failed");
     }
   }
 
   void _onPaymentError(PaymentFailureResponse response) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Payment Failed!"),
+      SnackBar(
+        content: const Text("Payment Failed!", textAlign: TextAlign.center),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.deepOrange,
-      ),
+        backgroundColor: Colors.black87,
+        margin: const EdgeInsets.only(bottom: 10, left: 60, right: 60),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),      ),
     );
   }
 
   void _onExternalWallet(ExternalWalletResponse response) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text("Wallet selected: ${response.walletName}"),
+        content: Text("Wallet selected: ${response.walletName}", textAlign: TextAlign.center),
         behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.deepOrange,
-      ),
+        backgroundColor: Colors.black87,
+        margin: const EdgeInsets.only(bottom: 10, left: 60, right: 60),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 2),      ),
     );
   }
 
@@ -320,11 +392,14 @@ class _CartScreenState extends State<CartScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // Modern subtle background
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         title: const Text("My Cart", style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.deepOrange,
+        backgroundColor: colorScheme.primary,
         centerTitle: true,
         elevation: 0,
       ),
@@ -334,10 +409,11 @@ class _CartScreenState extends State<CartScreen> {
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Lottie.asset("assets/empty_cart.json", height: 220),
                       const SizedBox(height: 20),
-                      const Text("Your cart is empty!", style: TextStyle(fontSize: 18, color: Colors.grey)),
+                      Text("Your cart is empty!", style: TextStyle(fontSize: 18, color: theme.hintColor)),
                     ],
                   ),
                 )
@@ -349,129 +425,142 @@ class _CartScreenState extends State<CartScreen> {
                         itemCount: cart.length,
                         itemBuilder: (context, index) {
                           final item = cart[index];
-                          return _buildCartItem(item);
+                          return _buildCartItem(item, theme);
                         },
                       ),
                     ),
                     const SizedBox(height: 10), // Spacing above bottom bar
                   ],
                 ),
-      bottomNavigationBar: _buildBottomBar(),
+      bottomNavigationBar: _buildBottomBar(theme),
       floatingActionButton: const ChatBotFAB(),
     );
   }
 
-  Widget _buildCartItem(Map<String, dynamic> item) {
+  Widget _buildCartItem(Map<String, dynamic> item, ThemeData theme) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(10), // Slightly reduced padding
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withOpacity(0.04),
             blurRadius: 10,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: Row(
         children: [
-          // Book Image
+          // Book Image (Reduced size)
           Container(
-            height: 70,
-            width: 70,
+            height: 60,
+            width: 60,
             decoration: BoxDecoration(
-              color: Colors.deepOrange.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: Colors.deepOrange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               child: item['image'] != null
                   ? Image.network(
-                      item['image'],
+                      item['image'].toString().startsWith("http")
+                          ? item['image']
+                          : "$baseUrl/uploads/product_images/${item['image']}",
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.auto_stories, color: Colors.deepOrange, size: 30),
+                      errorBuilder: (context, error, stackTrace) =>
+                          const Icon(Icons.auto_stories, color: Colors.deepOrange, size: 25),
                     )
-                  : const Icon(Icons.auto_stories, color: Colors.deepOrange, size: 30),
+                  : const Icon(Icons.auto_stories, color: Colors.deepOrange, size: 25),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 8), // Reduced spacing
           // Product Info
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
                   item['product_name'],
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold, fontSize: 13),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
                   "₹${item['price']}",
-                  style: const TextStyle(color: Colors.grey, fontSize: 14),
+                  style: const TextStyle(color: Colors.deepOrange, fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ],
             ),
           ),
-          // Quantity Controls
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            decoration: BoxDecoration(
-              color: Colors.grey[100],
-              borderRadius: BorderRadius.circular(25),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  onPressed: isUpdating ? null : () => updateQuantity(item['product_id'], "decrease"),
-                  icon: const Icon(Icons.remove, size: 18, color: Colors.black87),
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          const SizedBox(width: 6), // Reduced spacing
+          // Quantity Controls (Slightly more compact width)
+          Flexible(
+            child: SizedBox(
+              width: 95,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 0),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Text(
-                    "${item['quantity']}",
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                  ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisSize: MainAxisSize.max,
+                  children: [
+                    IconButton(
+                      onPressed: isUpdating ? null : () => updateQuantity(item['product_id'], "decrease"),
+                      icon: Icon(Icons.remove, size: 14, color: theme.colorScheme.onSurface),
+                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                      padding: EdgeInsets.zero,
+                    ),
+                    Text(
+                      "${item['quantity']}",
+                      style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      onPressed: isUpdating ? null : () => updateQuantity(item['product_id'], "increase"),
+                      icon: const Icon(Icons.add, size: 14, color: Colors.deepOrange),
+                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ],
                 ),
-                IconButton(
-                  onPressed: isUpdating ? null : () => updateQuantity(item['product_id'], "increase"),
-                  icon: const Icon(Icons.add, size: 18, color: Colors.deepOrange),
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                ),
-              ],
+              ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 4), // Reduced spacing
           // Delete Button
           IconButton(
             onPressed: isUpdating ? null : () => removeItem(item['product_id']),
-            icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
-          )
+            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBottomBar() {
+  Widget _buildBottomBar(ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(30),
           topRight: Radius.circular(30),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             offset: const Offset(0, -4),
             blurRadius: 15,
-          )
+          ),
         ],
       ),
       child: SafeArea(
@@ -482,28 +571,30 @@ class _CartScreenState extends State<CartScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Total Amount", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                Text("Total Amount", style: TextStyle(color: theme.hintColor, fontSize: 13)),
                 Text(
                   "₹${totalAmount.toStringAsFixed(0)}",
-                  style: const TextStyle(
-                    fontSize: 22,
+                  style: theme.textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: Colors.deepOrange,
                   ),
                 ),
               ],
             ),
-            ElevatedButton(
-              onPressed: cart.isEmpty ? null : initiatePayment,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepOrange,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 16),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 0,
+            SizedBox(
+              width: 130,
+              child: ElevatedButton(
+                onPressed: cart.isEmpty ? null : initiatePayment,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepOrange,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+                child: const Text("Checkout", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
-              child: const Text("Checkout", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            )
+            ),
           ],
         ),
       ),

@@ -16,7 +16,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
-  final String baseUrl = "http://10.46.51.170:5000";
+  final String baseUrl = "http://10.184.119.237:5000";
 
   @override
   void initState() {
@@ -94,39 +94,40 @@ class _ChatScreenState extends State<ChatScreen> {
         isError: true,
       ));
     } finally {
-      setState(() => _isLoading = false);
-      _scrollToBottom();
+      if (mounted) {
+        setState(() => _isLoading = false);
+        _scrollToBottom();
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFC),
+      backgroundColor: colorScheme.surface,
       appBar: AppBar(
         elevation: 0,
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: colorScheme.primary,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.black87, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: Column(
+        title: const Column(
           children: [
-            const Text(
+            Text(
               "Edu-Xpress Assistant",
-              style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
             ),
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  decoration: const BoxDecoration(color: Colors.green, shape: BoxShape.circle),
-                ),
-                const SizedBox(width: 4),
-                const Text("Always here to help", style: TextStyle(color: Colors.grey, fontSize: 10)),
+                CircleAvatar(radius: 3, backgroundColor: Colors.green),
+                SizedBox(width: 4),
+                Text("Always here to help", style: TextStyle(color: Colors.white70, fontSize: 10)),
               ],
             )
           ],
@@ -148,7 +149,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       begin: const Offset(0, 0.2),
                       end: Offset.zero,
                     ).chain(CurveTween(curve: Curves.easeOutCubic))),
-                    child: _buildChatBubble(_messages[index]),
+                    child: _buildChatBubble(_messages[index], theme),
                   ),
                 );
               },
@@ -162,13 +163,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 child: EnhancedTypingIndicator(),
               ),
             ),
-          _buildInputArea(),
+          _buildInputArea(theme),
         ],
       ),
     );
   }
 
-  Widget _buildChatBubble(ChatMessage message) {
+  Widget _buildChatBubble(ChatMessage message, ThemeData theme) {
     return Align(
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
@@ -180,8 +181,8 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: message.isUser 
-                  ? const Color(0xFF7B1FA2) 
-                  : (message.isError ? Colors.red[50] : Colors.white),
+                  ? theme.colorScheme.primary 
+                  : (message.isError ? Colors.red.withOpacity(0.1) : theme.cardColor),
               borderRadius: BorderRadius.only(
                 topLeft: const Radius.circular(20),
                 topRight: const Radius.circular(20),
@@ -190,17 +191,17 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.04),
+                  color: Colors.black.withOpacity(0.04),
                   blurRadius: 8,
                   offset: const Offset(0, 4),
                 )
               ],
-              border: message.isError ? Border.all(color: Colors.red[200]!) : null,
+              border: message.isError ? Border.all(color: Colors.red.withOpacity(0.3)) : null,
             ),
             child: Text(
               message.text,
               style: TextStyle(
-                color: message.isUser ? Colors.white : (message.isError ? Colors.red[900] : Colors.black87),
+                color: message.isUser ? Colors.white : (message.isError ? Colors.red[300] : theme.textTheme.bodyMedium?.color),
                 fontSize: 15,
                 height: 1.4,
               ),
@@ -210,7 +211,7 @@ class _ChatScreenState extends State<ChatScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Text(
               DateFormat('hh:mm a').format(message.timestamp),
-              style: TextStyle(color: Colors.grey[400], fontSize: 9),
+              style: TextStyle(color: theme.hintColor.withOpacity(0.5), fontSize: 9),
             ),
           ),
           const SizedBox(height: 12),
@@ -219,14 +220,14 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildInputArea() {
+  Widget _buildInputArea(ThemeData theme) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
+            color: Colors.black.withOpacity(0.05),
             offset: const Offset(0, -4),
             blurRadius: 10,
           )
@@ -239,16 +240,16 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF1F5F9),
+                  color: theme.brightness == Brightness.dark ? const Color(0xFF2C2C2C) : const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: TextField(
                   controller: _controller,
                   style: const TextStyle(fontSize: 15),
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: "Ask about books...",
                     border: InputBorder.none,
-                    hintStyle: TextStyle(color: Colors.blueGrey),
+                    hintStyle: TextStyle(color: theme.hintColor),
                   ),
                   onSubmitted: (_) => _sendMessage(),
                 ),
@@ -261,7 +262,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 duration: const Duration(milliseconds: 200),
                 padding: const EdgeInsets.all(12),
                 decoration: const BoxDecoration(
-                  color: Color(0xFF7B1FA2),
+                  color: Colors.deepOrange,
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
@@ -315,12 +316,13 @@ class _EnhancedTypingIndicatorState extends State<EnhancedTypingIndicator> with 
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text(
+        Text(
           "Edu-Xpress AI is typing",
-          style: TextStyle(color: Colors.grey, fontSize: 12, fontWeight: FontWeight.w500),
+          style: TextStyle(color: theme.hintColor, fontSize: 12, fontWeight: FontWeight.w500),
         ),
         const SizedBox(width: 8),
         ...List.generate(3, (index) {
@@ -336,7 +338,7 @@ class _EnhancedTypingIndicatorState extends State<EnhancedTypingIndicator> with 
                 decoration: BoxDecoration(
                   color: Color.lerp(
                     Colors.grey[300],
-                    const Color(0xFF7B1FA2),
+                    theme.colorScheme.primary,
                     progress,
                   ),
                   shape: BoxShape.circle,
