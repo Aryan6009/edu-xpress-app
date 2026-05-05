@@ -5,6 +5,7 @@ import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:edu_xpress_frontend/services/live_tracking_service.dart';
 import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
 
 class CartScreen extends StatefulWidget {
@@ -215,6 +216,8 @@ class _CartScreenState extends State<CartScreen> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString("token");
     String? selectedAddr = prefs.getString("selected_address");
+    String? selectedName = prefs.getString("selected_name");
+    String? selectedPhone = prefs.getString("selected_phone");
     double? selectedLat = prefs.getDouble("selected_lat");
     double? selectedLng = prefs.getDouble("selected_lng");
 
@@ -222,6 +225,69 @@ class _CartScreenState extends State<CartScreen> {
       _showSnackBar("📍 Please select a delivery address first!");
       Navigator.pushNamed(context, "/addresses");
       return;
+    }
+
+    // --- POPUP: If recipient details are missing, ask for them now ---
+    if (selectedName == null || selectedName.isEmpty || 
+        selectedPhone == null || selectedPhone.isEmpty) {
+      
+      final nameCtrl = TextEditingController();
+      final phoneCtrl = TextEditingController();
+      
+      bool? detailConfirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text("Complete Your Address"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("We need your name and phone for delivery.", style: TextStyle(fontSize: 13, color: Colors.grey)),
+              const SizedBox(height: 15),
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: "Recipient Name", border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: phoneCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: "Recipient Phone", border: OutlineInputBorder())),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+            ElevatedButton(
+              onPressed: () {
+                String name = nameCtrl.text.trim();
+                String phone = phoneCtrl.text.trim();
+                
+                if (name.isEmpty || phone.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all fields")));
+                  return;
+                }
+                
+                // --- Phone Number Validation ---
+                if (!RegExp(r'^[0-9]{10}$').hasMatch(phone)) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("❌ Invalid phone number! Please enter exactly 10 digits."))
+                  );
+                  return;
+                }
+                
+                Navigator.pop(context, true);
+              },
+              child: const Text("Save & Continue"),
+            ),
+          ],
+        ),
+      );
+
+      if (detailConfirmed != true) return;
+
+      // Save to SharedPreferences so it's remembered for the payment step
+      await prefs.setString("selected_name", nameCtrl.text.trim());
+      await prefs.setString("selected_phone", phoneCtrl.text.trim());
+      
+      // Update local variables for the rest of this function
+      selectedName = nameCtrl.text.trim();
+      selectedPhone = phoneCtrl.text.trim();
+
+      // OPTIONAL: Update on backend if needed, but for now we have it locally for verification_payment call
     }
 
     // --- Distance Check (10km Radius) ---
@@ -307,56 +373,112 @@ class _CartScreenState extends State<CartScreen> {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String? token = prefs.getString("token");
     String savedAddr = prefs.getString("selected_address") ?? "";
+    double savedLat = prefs.getDouble("selected_lat") ?? 0.0;
+    double savedLng = prefs.getDouble("selected_lng") ?? 0.0;
+    String savedName = prefs.getString("selected_name") ?? "";
+    String savedPhone = prefs.getString("selected_phone") ?? "";
 
-    TextEditingController nameController = TextEditingController();
-    TextEditingController phoneController = TextEditingController();
+    TextEditingController nameController = TextEditingController(text: savedName);
+    TextEditingController phoneController = TextEditingController(text: savedPhone);
     TextEditingController addressController = TextEditingController(text: savedAddr);
 
     if (!mounted) return;
-    await showDialog(
+    
+    // Show dialog to collect details
+    bool? confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
         title: const Text("Confirm Delivery Details"),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(controller: nameController, decoration: const InputDecoration(labelText: "Full Name")),
-            TextField(controller: phoneController, decoration: const InputDecoration(labelText: "Phone")),
-            TextField(controller: addressController, decoration: const InputDecoration(labelText: "Delivery Address"), maxLines: 2),
-          ],
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: "Full Name")),
+              TextField(controller: phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: "Phone")),
+              TextField(controller: addressController, decoration: const InputDecoration(labelText: "Delivery Address"), maxLines: 2),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(),
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.trim().isEmpty || phoneController.text.trim().isEmpty || addressController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Please fill all fields")));
+                return;
+              }
+              Navigator.of(context).pop(true);
+            },
             child: const Text("Confirm & Place Order"),
           ),
         ],
       ),
     );
 
-    final res = await http.post(
-      Uri.parse("$baseUrl/verify_payment"),
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": "Bearer $token"
-      },
-      body: jsonEncode({
-        "razorpay_payment_id": response.paymentId,
-        "razorpay_order_id": response.orderId,
-        "razorpay_signature": response.signature,
-        "name": nameController.text,
-        "phone": phoneController.text,
-        "address": addressController.text,
-      }),
+    if (confirmed != true) return;
+
+    // Show loading while verifying
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.deepOrange)),
     );
 
-    if (!mounted) return;
-    if (res.statusCode == 200) {
-      _showSnackBar("🎉 Payment successful and order placed!");
-      Navigator.pushReplacementNamed(context, "/orders");
-    } else {
-      _showSnackBar("❌ Payment verification failed");
+    try {
+      final res = await http.post(
+        Uri.parse("$baseUrl/verify_payment"),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token"
+        },
+        body: jsonEncode({
+          "razorpay_payment_id": response.paymentId,
+          "razorpay_order_id": response.orderId,
+          "razorpay_signature": response.signature,
+          "name": nameController.text.trim(),
+          "phone": phoneController.text.trim(),
+          "address": addressController.text.trim(),
+          "latitude": savedLat,
+          "longitude": savedLng,
+        }),
+      );
+
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // Close loading
+
+      if (res.statusCode == 200) {
+        _showSnackBar("🎉 Payment successful and order placed!");
+        
+        // Start Global Live Tracking
+        LiveTrackingService().startTracking(
+          orderId: response.orderId ?? "ORD-${DateTime.now().millisecondsSinceEpoch}",
+          lat: savedLat,
+          lng: savedLng,
+          address: addressController.text.trim(),
+        );
+
+        Navigator.pushReplacementNamed(
+          context, 
+          "/track_order",
+          arguments: {
+            "address": addressController.text.trim(),
+            "lat": savedLat,
+            "lng": savedLng,
+          }
+        );
+      } else {
+        final errorData = jsonDecode(res.body);
+        _showSnackBar("❌ Verification failed: ${errorData['error'] ?? 'Unknown error'}");
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.of(context, rootNavigator: true).pop(); // Close loading
+      _showSnackBar("❌ Connection error during verification");
     }
   }
 
@@ -499,37 +621,37 @@ class _CartScreenState extends State<CartScreen> {
           ),
           const SizedBox(width: 6), // Reduced spacing
           // Quantity Controls (Slightly more compact width)
-          Flexible(
-            child: SizedBox(
-              width: 95,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 0),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    IconButton(
-                      onPressed: isUpdating ? null : () => updateQuantity(item['product_id'], "decrease"),
-                      icon: Icon(Icons.remove, size: 14, color: theme.colorScheme.onSurface),
-                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                      padding: EdgeInsets.zero,
-                    ),
-                    Text(
-                      "${item['quantity']}",
-                      style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    IconButton(
-                      onPressed: isUpdating ? null : () => updateQuantity(item['product_id'], "increase"),
-                      icon: const Icon(Icons.add, size: 14, color: Colors.deepOrange),
-                      constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
-                      padding: EdgeInsets.zero,
-                    ),
-                  ],
-                ),
+          SizedBox(
+            width: 95,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 0),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  IconButton(
+                    onPressed: isUpdating ? null : () => updateQuantity(item['product_id'], "decrease"),
+                    icon: Icon(Icons.remove, size: 14, color: theme.colorScheme.onSurface),
+                    constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  Text(
+                    "${item['quantity']}",
+                    style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  IconButton(
+                    onPressed: isUpdating ? null : () => updateQuantity(item['product_id'], "increase"),
+                    icon: const Icon(Icons.add, size: 14, color: Colors.deepOrange),
+                    constraints: const BoxConstraints(minWidth: 26, minHeight: 26),
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
               ),
             ),
           ),
@@ -540,6 +662,7 @@ class _CartScreenState extends State<CartScreen> {
             icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 30, minHeight: 30),
+            visualDensity: VisualDensity.compact,
           ),
         ],
       ),
@@ -567,20 +690,27 @@ class _CartScreenState extends State<CartScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Total Amount", style: TextStyle(color: theme.hintColor, fontSize: 13)),
-                Text(
-                  "₹${totalAmount.toStringAsFixed(0)}",
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Colors.deepOrange,
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text("Total Amount", style: TextStyle(color: theme.hintColor, fontSize: 13)),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      "₹${totalAmount.toStringAsFixed(0)}",
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.deepOrange,
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
+            const SizedBox(width: 12),
             SizedBox(
               width: 130,
               child: ElevatedButton(

@@ -565,10 +565,16 @@ Widget buildShimmer() {  return GridView.builder(
                                       child: ClipRRect(
                                         borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                                         child: Image.network(
-                                          product['image'].toString().startsWith("http") ? product['image'] : "$baseUrl/uploads/product_images/${product['image']}",
+                                          product['image'] != null
+                                              ? (product['image'].toString().startsWith("http")
+                                                  ? product['image']
+                                                  : "$baseUrl/uploads/product_images/${product['image']}")
+                                              : "",
                                           width: double.infinity,
                                           fit: BoxFit.cover,
-                                          errorBuilder: (c, e, s) => const Center(child: Icon(Icons.menu_book, size: 50)),
+                                          errorBuilder: (c, e, s) => const Center(
+                                            child: Icon(Icons.auto_stories, color: Colors.deepOrange, size: 40),
+                                          ),
                                         ),
                                       ),
                                     ),

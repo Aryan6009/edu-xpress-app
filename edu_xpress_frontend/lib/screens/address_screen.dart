@@ -58,6 +58,8 @@ class _AddressScreenState extends State<AddressScreen> {
   Future<void> selectAddress(Map addr) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setString("selected_address", addr['address']);
+    await prefs.setString("selected_name", addr['recipient_name'] ?? "");
+    await prefs.setString("selected_phone", addr['recipient_phone'] ?? "");
     await prefs.setDouble("selected_lat", addr['latitude']);
     await prefs.setDouble("selected_lng", addr['longitude']);
     Navigator.pop(context, true);

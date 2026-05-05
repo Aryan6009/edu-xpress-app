@@ -9,6 +9,10 @@ import 'package:edu_xpress_frontend/screens/search_screen.dart';
 import 'package:edu_xpress_frontend/screens/profile_screen.dart';
 import 'package:edu_xpress_frontend/screens/chat_screen.dart';
 import 'package:edu_xpress_frontend/screens/address_screen.dart';
+import 'package:edu_xpress_frontend/screens/track_order_screen.dart';
+import 'package:edu_xpress_frontend/services/live_tracking_service.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   runApp(const EduXpressApp());
@@ -34,6 +38,7 @@ class _EduXpressAppState extends State<EduXpressApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+  navigatorKey: navigatorKey,
   title: 'Edu-Xpress',
   debugShowCheckedModeBanner: false,
 
@@ -136,6 +141,15 @@ darkTheme: ThemeData(
 
   initialRoute: '/',
 
+  builder: (context, child) {
+    return Stack(
+      children: [
+        child!,
+        const LiveTrackingOverlay(),
+      ],
+    );
+  },
+
   routes: {
     '/': (context) => const SplashScreen(),
     '/login': (context) => const LoginScreen(),
@@ -145,7 +159,8 @@ darkTheme: ThemeData(
     '/orders': (context) => const OrdersScreen(),
     '/search': (context) => const SearchScreen(),
     '/chat': (context) => const ChatScreen(),
-    '/addresses': (context) => const AddressScreen(),
+    '/addresses': (context) => AddressScreen(),
+    '/track_order': (context) => TrackOrderScreen(),
 
     '/profile': (context) => ProfileScreen(
       toggleTheme: toggleTheme,

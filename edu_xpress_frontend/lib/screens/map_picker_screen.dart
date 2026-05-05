@@ -24,6 +24,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _houseController = TextEditingController();
   final TextEditingController _landmarkController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   bool _isLoading = false;
   bool _isSearching = false;
   List<dynamic> _suggestions = [];
@@ -43,6 +45,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
     _addressController.dispose();
     _houseController.dispose();
     _landmarkController.dispose();
+    _nameController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -260,6 +264,8 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
       },
       body: jsonEncode({
         "address": finalAddress,
+        "recipient_name": _nameController.text.trim(),
+        "recipient_phone": _phoneController.text.trim(),
         "latitude": _selectedLocation.latitude,
         "longitude": _selectedLocation.longitude,
       }),
@@ -438,6 +444,26 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
                         child: _buildInputField(
                           controller: _landmarkController,
                           hint: "Landmark (Optional)",
+                          theme: theme,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildInputField(
+                          controller: _nameController,
+                          hint: "Recipient Name",
+                          theme: theme,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildInputField(
+                          controller: _phoneController,
+                          hint: "Recipient Phone",
                           theme: theme,
                         ),
                       ),
