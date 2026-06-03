@@ -1,0 +1,36 @@
+﻿{% extends 'admin/base.html' %}
+{% block head_css %}
+    {{ super() }}
+    <style>
+        body {
+            background-color: #f4f6f9 !important;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar-default, .navbar-inverse {
+            background-color: #ffffff !important;
+            border-bottom: 1px solid #e1e4e8 !important;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .navbar-brand {
+            color: #ff6b00 !important;
+            font-weight: 800 !important;
+        }
+        .admin-content {
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            margin-top: 20px;
+        }
+        .btn-primary, .btn-success {
+            background-color: #ff6b00 !important;
+            border-color: #ff6b00 !important;
+        }
+    </style>
+{% endblock %}
+
+{% block body %}
+    <div class="admin-content">
+        {{ super() }}
+    </div>
+{% endblock %}

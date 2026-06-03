@@ -7,6 +7,7 @@ import 'package:lottie/lottie.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:edu_xpress_frontend/services/live_tracking_service.dart';
 import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
+import 'package:edu_xpress_frontend/services/api_config.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -22,8 +23,6 @@ class _CartScreenState extends State<CartScreen> {
   bool loading = true;
   bool isUpdating = false; // Loading state for quantity updates
 
-  final String baseUrl = "http://10.184.119.237:5000";
-  
   // Fixed Shop Location (e.g., Hazratganj, Lucknow)
   static const double SHOP_LAT = 26.8467;
   static const double SHOP_LNG = 80.9462;
@@ -49,7 +48,7 @@ class _CartScreenState extends State<CartScreen> {
       }
 
       final res = await http.get(
-        Uri.parse("$baseUrl/cart"),
+        Uri.parse("${ApiConfig.baseUrl}/cart"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 10));
 
@@ -97,8 +96,8 @@ class _CartScreenState extends State<CartScreen> {
 
     try {
       final url = action == "increase"
-          ? "$baseUrl/cart/add"
-          : "$baseUrl/cart/decrease/$productId";
+          ? "${ApiConfig.baseUrl}/cart/add"
+          : "${ApiConfig.baseUrl}/cart/decrease/$productId";
 
       final response = await http.post(
         Uri.parse(url),
@@ -152,7 +151,7 @@ class _CartScreenState extends State<CartScreen> {
     String? token = prefs.getString("token");
 
     final res = await http.delete(
-      Uri.parse("$baseUrl/cart/remove/$itemId"),
+      Uri.parse("${ApiConfig.baseUrl}/cart/remove/$itemId"),
       headers: {"Authorization": "Bearer $token"},
     );
 
@@ -316,7 +315,7 @@ class _CartScreenState extends State<CartScreen> {
     );
 
     final res = await http.post(
-      Uri.parse("$baseUrl/create_order"),
+      Uri.parse("${ApiConfig.baseUrl}/create_order"),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token"
@@ -431,7 +430,7 @@ class _CartScreenState extends State<CartScreen> {
 
     try {
       final res = await http.post(
-        Uri.parse("$baseUrl/verify_payment"),
+        Uri.parse("${ApiConfig.baseUrl}/verify_payment"),
         headers: {
           "Content-Type": "application/json",
           "Authorization": "Bearer $token"
@@ -590,7 +589,7 @@ class _CartScreenState extends State<CartScreen> {
                   ? Image.network(
                       item['image'].toString().startsWith("http")
                           ? item['image']
-                          : "$baseUrl/uploads/product_images/${item['image']}",
+                          : "${ApiConfig.baseUrl}/uploads/product_images/${item['image']}",
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
                           const Icon(Icons.auto_stories, color: Colors.deepOrange, size: 25),

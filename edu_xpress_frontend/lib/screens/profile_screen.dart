@@ -3,8 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
-
-const String baseUrl = "http://10.184.119.237:5000";
+import 'package:edu_xpress_frontend/services/api_config.dart';
 
 class ProfileScreen extends StatefulWidget {
   final Function(bool) toggleTheme;
@@ -38,7 +37,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       }
 
       final res = await http.get(
-        Uri.parse("$baseUrl/profile"),
+        Uri.parse("${ApiConfig.baseUrl}/profile"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 10));
 

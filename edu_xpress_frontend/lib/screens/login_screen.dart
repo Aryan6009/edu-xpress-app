@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:edu_xpress_frontend/services/api_config.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,25 +24,24 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscurePassword = true;
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: '884721662496-950q8lorggjhj1l3nta469e1ijmdip7v.apps.googleusercontent.com',
+    serverClientId: '243640116424-g2snk2o9vln6511ttovlgpuhhvg5hubc.apps.googleusercontent.com',
   );
-
-  final String baseUrl = "http://10.184.119.237:5000";
 
   Future<void> loginUser() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
+    String loginUrl = "${ApiConfig.baseUrl}/login";
     try {
       final res = await http.post(
-        Uri.parse("$baseUrl/login"),
+        Uri.parse(loginUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "email": emailController.text.trim(),
           "password": passwordController.text.trim()
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       final body = jsonDecode(res.body);
 
@@ -50,10 +50,10 @@ class _LoginScreenState extends State<LoginScreen> {
       } else if (res.statusCode == 403) {
         _showVerificationDialog(emailController.text.trim());
       } else {
-        _showError(body["error"] ?? "Login failed");
+        _showError(body["error"] ?? "Login failed (Status: ${res.statusCode})");
       }
     } catch (e) {
-      _showError("Connection error. Please try again.");
+      _showError("Connection error: $e\nURL: $loginUrl");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -70,8 +70,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       
+      if (googleAuth.idToken == null) {
+        _showError("Google Sign-In failed: Could not retrieve ID Token. Check your configuration.");
+        setState(() => _isLoading = false);
+        return;
+      }
+
       final res = await http.post(
-        Uri.parse("$baseUrl/google-login"),
+        Uri.parse("${ApiConfig.baseUrl}/google-login"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"id_token": googleAuth.idToken}),
       );
@@ -367,7 +373,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     if (!_isOTPSent) {
                       // Send OTP
                       final res = await http.post(
-                        Uri.parse("$baseUrl/send-otp"),
+                        Uri.parse("${ApiConfig.baseUrl}/send-otp"),
                         headers: {"Content-Type": "application/json"},
                         body: jsonEncode({"phone": phoneController.text.trim()}),
                       );
@@ -378,7 +384,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     } else {
                       // Verify OTP
                       final res = await http.post(
-                        Uri.parse("$baseUrl/mobile-login"),
+                        Uri.parse("${ApiConfig.baseUrl}/mobile-login"),
                         headers: {"Content-Type": "application/json"},
                         body: jsonEncode({
                           "phone": phoneController.text.trim(),

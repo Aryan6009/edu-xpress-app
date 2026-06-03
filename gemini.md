@@ -84,8 +84,7 @@ POST /save-address
 
 ## 🚫 Constraints
 
-* Must use FREE AI APIs (NO OpenAI paid APIs)
-* Prefer Google Gemini API (free tier)
+* Use Grok AI (xAI) API (OpenAI-compatible)
 * Keep backend lightweight
 * Avoid major refactoring
 
@@ -112,7 +111,7 @@ POST /save-address
 
 ### Phase 1:
 
-* Add `/chat` API using Gemini
+* Add `/chat` API using Grok AI (xAI)
 
 ### Phase 2:
 

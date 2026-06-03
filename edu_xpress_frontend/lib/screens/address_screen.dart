@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:edu_xpress_frontend/screens/map_picker_screen.dart';
+import 'package:edu_xpress_frontend/services/api_config.dart';
 
 class AddressScreen extends StatefulWidget {
   const AddressScreen({super.key});
@@ -14,7 +16,6 @@ class AddressScreen extends StatefulWidget {
 class _AddressScreenState extends State<AddressScreen> {
   List addresses = [];
   bool loading = true;
-  final String baseUrl = "http://10.184.119.237:5000";
 
   Future<void> fetchAddresses() async {
     setState(() => loading = true);
@@ -23,7 +24,7 @@ class _AddressScreenState extends State<AddressScreen> {
 
     try {
       final res = await http.get(
-        Uri.parse("$baseUrl/addresses"),
+        Uri.parse("${ApiConfig.baseUrl}/addresses"),
         headers: {"Authorization": "Bearer $token"},
       );
       if (res.statusCode == 200) {
@@ -43,7 +44,7 @@ class _AddressScreenState extends State<AddressScreen> {
 
     try {
       final res = await http.delete(
-        Uri.parse("$baseUrl/delete-address/$id"),
+        Uri.parse("${ApiConfig.baseUrl}/delete-address/$id"),
         headers: {"Authorization": "Bearer $token"},
       );
       if (res.statusCode == 200) {
@@ -134,9 +135,17 @@ class _AddressScreenState extends State<AddressScreen> {
                 ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
+          SharedPreferences prefs = await SharedPreferences.getInstance();
+          double? lat = prefs.getDouble("selected_lat");
+          double? lng = prefs.getDouble("selected_lng");
+          LatLng? initial;
+          if (lat != null && lng != null) {
+            initial = LatLng(lat, lng);
+          }
+
           final result = await Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const MapPickerScreen()),
+            MaterialPageRoute(builder: (context) => MapPickerScreen(initialCenter: initial)),
           );
           if (result == true) {
             fetchAddresses();

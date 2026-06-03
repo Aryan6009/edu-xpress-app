@@ -5,9 +5,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
+import 'package:edu_xpress_frontend/services/api_config.dart';
 import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
-
-const String baseUrl = "http://10.184.119.237:5000";
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -31,7 +30,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       }
 
       final res = await http.get(
-        Uri.parse("$baseUrl/orders"),
+        Uri.parse("${ApiConfig.baseUrl}/orders"),
         headers: {"Authorization": "Bearer $token"},
       ).timeout(const Duration(seconds: 10));
 
@@ -87,6 +86,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
       case 'confirmed': return Colors.orange;
       case 'delivered': return Colors.green;
       case 'picked up': return Colors.purple;
+      case 'cancelled': return Colors.red;
       default: return Colors.grey;
     }
   }
@@ -102,8 +102,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
         title: const Text("Order History", style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: theme.colorScheme.primary,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
       ),
-      drawer: const AppDrawer(),
       body: RefreshIndicator(
         onRefresh: fetchOrders,
         child: loading
@@ -115,87 +118,120 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     itemCount: orders.length,
                     itemBuilder: (context, index) {
                       final order = orders[index];
+                      String orderIdStr = order['id'].toString();
+                      
                       // Check if this is the active order being simulated
-                      bool isActive = activeOrder != null && index == 0; // Simplified for demo
-                      String displayStatus = isActive ? activeOrder.status : order['status'];
+                      bool isActive = activeOrder != null && activeOrder.id == orderIdStr;
+                      bool wasDeliveredThisSession = LiveTrackingService().isDeliveredLocally(orderIdStr);
+                      
+                      String displayStatus = isActive 
+                          ? activeOrder.status 
+                          : (wasDeliveredThisSession ? "Delivered" : order['status']);
 
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                        elevation: 4,
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text("Order #ORD${order['id']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                      Text(formatDate(order['created_at']), style: TextStyle(color: theme.hintColor, fontSize: 12)),
-                                    ],
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                                    decoration: BoxDecoration(
-                                      color: _getStatusColor(displayStatus).withOpacity(0.1),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Text(
-                                      displayStatus.toUpperCase(),
-                                      style: TextStyle(color: _getStatusColor(displayStatus), fontWeight: FontWeight.bold, fontSize: 11),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const Divider(height: 24),
-                              Row(
-                                children: [
-                                  Container(
-                                    height: 50,
-                                    width: 50,
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[100],
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Icon(Icons.book, color: Colors.deepOrange),
-                                  ),
-                                  const SizedBox(width: 15),
-                                  Expanded(
-                                    child: Column(
+                      return InkWell(
+                        onTap: () {
+                          Navigator.pushNamed(
+                            context, 
+                            '/order_detail',
+                            arguments: order,
+                          );
+                        },
+                        child: Card(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                          elevation: 4,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text("Total: ₹${order['total_amount']}", style: const TextStyle(fontWeight: FontWeight.bold)),
-                                        Text("${order['quantity']} Item(s)", style: TextStyle(color: theme.hintColor, fontSize: 12)),
+                                        Text("Order #ORD${order['id']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                        Text(formatDate(order['created_at']), style: TextStyle(color: theme.hintColor, fontSize: 12)),
                                       ],
                                     ),
-                                  ),
-                                  if (displayStatus.toLowerCase() != 'delivered')
-                                    ElevatedButton(
-                                      onPressed: () {
-                                        Navigator.pushNamed(
-                                          context, 
-                                          "/track_order",
-                                          arguments: {
-                                            "address": order['address'] ?? "Delivery Address",
-                                            "lat": order['latitude'] ?? 26.8467,
-                                            "lng": order['longitude'] ?? 80.9462,
-                                          }
-                                        );
-                                      },
-                                      style: ElevatedButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                                        minimumSize: const Size(80, 36),
-                                        backgroundColor: Colors.deepOrange,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                      decoration: BoxDecoration(
+                                        color: _getStatusColor(displayStatus).withOpacity(0.1),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: const Text("Track", style: TextStyle(fontSize: 12)),
+                                      child: Text(
+                                        displayStatus.toUpperCase(),
+                                        style: TextStyle(color: _getStatusColor(displayStatus), fontWeight: FontWeight.bold, fontSize: 11),
+                                      ),
                                     ),
-                                ],
-                              ),
-                            ],
+                                  ],
+                                ),
+                                const Divider(height: 24),
+                                Row(
+                                  children: [
+                                    Container(
+                                      height: 60,
+                                      width: 60,
+                                      decoration: BoxDecoration(
+                                        color: Colors.grey[100],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: order['product_image'] != null
+                                            ? Image.network(
+                                                order['product_image'],
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (c, e, s) => const Icon(Icons.book, color: Colors.deepOrange),
+                                              )
+                                            : const Icon(Icons.book, color: Colors.deepOrange),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 15),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            order['product_name'] ?? "Unknown Product",
+                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text("Total: ₹${order['total_amount']}", style: const TextStyle(fontWeight: FontWeight.w500, color: Colors.deepOrange)),
+                                          Text("${order['quantity']} Item(s)", style: TextStyle(color: theme.hintColor, fontSize: 12)),
+                                        ],
+                                      ),
+                                    ),
+                                    if (displayStatus.toLowerCase() != 'delivered' && displayStatus.toLowerCase() != 'cancelled')
+                                      ElevatedButton(
+                                        onPressed: () {
+                                          Navigator.pushNamed(
+                                            context, 
+                                            "/track_order",
+                                            arguments: {
+                                              "order_id": order['id'],
+                                              "address": order['address'] ?? "Delivery Address",
+                                              "lat": order['latitude'] ?? 26.8467,
+                                              "lng": order['longitude'] ?? 80.9462,
+                                            }
+                                          );
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                                          minimumSize: const Size(80, 36),
+                                          backgroundColor: Colors.deepOrange,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        ),
+                                        child: const Text("Track", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       );

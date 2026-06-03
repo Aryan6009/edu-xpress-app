@@ -10,6 +10,8 @@ import 'package:edu_xpress_frontend/screens/profile_screen.dart';
 import 'package:edu_xpress_frontend/screens/chat_screen.dart';
 import 'package:edu_xpress_frontend/screens/address_screen.dart';
 import 'package:edu_xpress_frontend/screens/track_order_screen.dart';
+import 'package:edu_xpress_frontend/screens/product_detail_screen.dart';
+import 'package:edu_xpress_frontend/screens/order_detail_screen.dart';
 import 'package:edu_xpress_frontend/services/live_tracking_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -142,12 +144,7 @@ darkTheme: ThemeData(
   initialRoute: '/',
 
   builder: (context, child) {
-    return Stack(
-      children: [
-        child!,
-        const LiveTrackingOverlay(),
-      ],
-    );
+    return child!;
   },
 
   routes: {
@@ -161,6 +158,8 @@ darkTheme: ThemeData(
     '/chat': (context) => const ChatScreen(),
     '/addresses': (context) => AddressScreen(),
     '/track_order': (context) => TrackOrderScreen(),
+    '/product_detail': (context) => const ProductDetailScreen(),
+    '/order_detail': (context) => const OrderDetailScreen(),
 
     '/profile': (context) => ProfileScreen(
       toggleTheme: toggleTheme,

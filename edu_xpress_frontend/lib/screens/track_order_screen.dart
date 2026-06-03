@@ -63,6 +63,7 @@ class _TrackOrderScreenState extends State<TrackOrderScreen> {
           _orderStatus = "Delivered";
           _statusStep = 3;
         });
+        _showSuccessAndRating();
       } else {
         setState(() {
           // Linear interpolation for movement
@@ -84,6 +85,92 @@ class _TrackOrderScreenState extends State<TrackOrderScreen> {
         });
       }
     });
+  }
+
+  void _showSuccessAndRating() {
+    // Show a success snackbar or dialog first
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("🎉 Order Delivered Successfully!"),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+
+    // Prompt for rating after a short delay
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) _showRatingDialog();
+    });
+  }
+
+  void _showRatingDialog() {
+    int rating = 0;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Column(
+            children: [
+              Icon(Icons.stars, color: Colors.orange, size: 50),
+              SizedBox(height: 10),
+              Text("Rate your Experience", textAlign: TextAlign.center),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("How was the delivery and the books?", textAlign: TextAlign.center),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(5, (index) {
+                  return IconButton(
+                    onPressed: () => setDialogState(() => rating = index + 1),
+                    icon: Icon(
+                      index < rating ? Icons.star : Icons.star_border,
+                      color: Colors.orange,
+                      size: 32,
+                    ),
+                  );
+                }),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                decoration: InputDecoration(
+                  hintText: "Add a comment (Optional)",
+                  hintStyle: const TextStyle(fontSize: 13),
+                  filled: true,
+                  fillColor: Colors.grey[100],
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+                maxLines: 2,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Skip", style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: rating == 0 ? null : () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Thank you for your feedback!")),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text("Submit", style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -199,18 +286,25 @@ class _TrackOrderScreenState extends State<TrackOrderScreen> {
                       Container(
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: Colors.deepOrange.withOpacity(0.1),
+                          color: (_orderStatus == "Delivered" ? Colors.green : Colors.deepOrange).withOpacity(0.1),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.flash_on, color: Colors.deepOrange),
+                        child: AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 500),
+                          child: Icon(
+                            _orderStatus == "Delivered" ? Icons.check_circle : Icons.directions_bike,
+                            key: ValueKey(_orderStatus),
+                            color: _orderStatus == "Delivered" ? Colors.green : Colors.deepOrange,
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 15),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(_orderStatus, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                            const Text("Arriving in 15-20 mins", style: TextStyle(color: Colors.grey, fontSize: 13)),
+                            Text(_orderStatus == "Delivered" ? "Order Delivered!" : "Arif is Delivering!", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                            Text(_orderStatus == "Delivered" ? "Mohammad Arif has arrived" : "Arriving in 15 mins", style: const TextStyle(color: Colors.grey, fontSize: 13)),
                           ],
                         ),
                       ),
@@ -270,7 +364,7 @@ class _TrackOrderScreenState extends State<TrackOrderScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text("Rahul Kumar", style: TextStyle(fontWeight: FontWeight.bold)),
+                            Text("Mohammad Arif", style: TextStyle(fontWeight: FontWeight.bold)),
                             Text("Delivery Partner", style: TextStyle(color: Colors.grey, fontSize: 12)),
                           ],
                         ),
@@ -279,6 +373,48 @@ class _TrackOrderScreenState extends State<TrackOrderScreen> {
                         onPressed: () {},
                         icon: const Icon(Icons.phone, color: Colors.green),
                         style: IconButton.styleFrom(backgroundColor: Colors.green.withOpacity(0.1)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // 🤖 AI Support & Cancel Actions
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+                            final orderId = args?['order_id'];
+                            Navigator.pushNamed(context, '/chat', arguments: {"prefill": "I need support for my order #ORD$orderId"});
+                          },
+                          icon: const Icon(Icons.support_agent, size: 18),
+                          label: const Text("Support"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.blue,
+                            side: const BorderSide(color: Colors.blue),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+                            final orderId = args?['order_id'];
+                            Navigator.pushNamed(context, '/chat', arguments: {"prefill": "I want to cancel my order #ORD$orderId"});
+                          },
+                          icon: const Icon(Icons.cancel_outlined, size: 18),
+                          label: const Text("Cancel"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            side: const BorderSide(color: Colors.red),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
                       ),
                     ],
                   ),

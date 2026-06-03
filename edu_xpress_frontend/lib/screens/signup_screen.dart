@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:lottie/lottie.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:edu_xpress_frontend/services/api_config.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -27,9 +28,8 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
   final _formKey = GlobalKey<FormState>();
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
-    serverClientId: '884721662496-950q8lorggjhj1l3nta469e1ijmdip7v.apps.googleusercontent.com',
+    serverClientId: '243640116424-g2snk2o9vln6511ttovlgpuhhvg5hubc.apps.googleusercontent.com',
   );
-  final String baseUrl = "http://10.184.119.237:5000";
 
   @override
   void initState() {
@@ -86,16 +86,17 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
 
     setState(() => _isLoading = true);
 
+    String registerUrl = "${ApiConfig.baseUrl}/register";
     try {
       final res = await http.post(
-        Uri.parse("$baseUrl/register"),
+        Uri.parse(registerUrl),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({
           "username": usernameController.text.trim(),
           "email": emailController.text.trim(),
           "password": passwordController.text.trim()
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       final body = jsonDecode(res.body);
       if (res.statusCode == 201) {
@@ -103,10 +104,10 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
         if (!mounted) return;
         Navigator.pushReplacementNamed(context, '/login');
       } else {
-        _showError(body["error"] ?? "Registration failed");
+        _showError(body["error"] ?? "Registration failed (Status: ${res.statusCode})");
       }
     } catch (e) {
-      _showError("Connection error. Please try again.");
+      _showError("Connection error: $e\nURL: $registerUrl");
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -124,7 +125,7 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
       
       final res = await http.post(
-        Uri.parse("$baseUrl/google-login"),
+        Uri.parse("${ApiConfig.baseUrl}/google-login"),
         headers: {"Content-Type": "application/json"},
         body: jsonEncode({"id_token": googleAuth.idToken}),
       );
@@ -419,7 +420,7 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
                   onPressed: () async {
                     if (!_isOTPSent) {
                       final res = await http.post(
-                        Uri.parse("$baseUrl/send-otp"),
+                        Uri.parse("${ApiConfig.baseUrl}/send-otp"),
                         headers: {"Content-Type": "application/json"},
                         body: jsonEncode({"phone": phoneController.text.trim()}),
                       );
@@ -429,7 +430,7 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
                       }
                     } else {
                       final res = await http.post(
-                        Uri.parse("$baseUrl/mobile-login"),
+                        Uri.parse("${ApiConfig.baseUrl}/mobile-login"),
                         headers: {"Content-Type": "application/json"},
                         body: jsonEncode({
                           "phone": phoneController.text.trim(),

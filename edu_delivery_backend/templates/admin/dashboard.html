@@ -1,0 +1,202 @@
+﻿{% extends 'admin/master.html' %}
+{% block body %}
+<style>
+    :root {
+        --primary-orange: #ff6b00;
+        --secondary-blue: #4a90e2;
+        --bg-color: #f8f9fa;
+    }
+
+    /* Override the master.html white background for dashboard */
+    .admin-content {
+        background: transparent !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin-top: 0 !important;
+    }
+
+    body {
+        background-color: var(--bg-color) !important;
+        margin: 0;
+        overflow-x: hidden;
+    }
+
+    /* Interactive Background Container */
+    .dashboard-wrapper {
+        position: relative;
+        min-height: 100vh;
+        width: 100%;
+        padding: 30px;
+        z-index: 1;
+    }
+
+    /* Floating Study Material Icons */
+    .background-objects {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        overflow: hidden;
+        pointer-events: none;
+    }
+
+    .study-icon {
+        position: absolute;
+        color: rgba(255, 107, 0, 0.12); /* Slightly darker for visibility */
+        font-size: 2.5rem;
+        user-select: none;
+        animation: float 20s infinite linear;
+    }
+
+    @keyframes float {
+        0% { transform: translateY(110vh) rotate(0deg); opacity: 0; }
+        10% { opacity: 1; }
+        90% { opacity: 1; }
+        100% { transform: translateY(-20vh) rotate(360deg); opacity: 0; }
+    }
+
+    /* Dashboard UI Elements */
+    .card {
+        border: none;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(10px);
+        transition: all 0.3s ease;
+        border-bottom: 4px solid transparent;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    }
+
+    .card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 15px 30px rgba(0,0,0,0.1);
+        border-bottom: 4px solid var(--primary-orange);
+    }
+
+    .display-4 { font-weight: 800; color: #333; }
+    .stat-label { color: #666; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; font-weight: bold; }
+
+    .btn-quick {
+        border-radius: 12px;
+        padding: 15px;
+        font-weight: bold;
+        transition: all 0.2s;
+        border: 2px solid #eee;
+        background: white;
+        color: #444;
+    }
+
+    .btn-quick:hover {
+        background: var(--primary-orange);
+        color: white !important;
+        transform: scale(1.05);
+        border-color: var(--primary-orange);
+    }
+</style>
+
+<div class="background-objects">
+    <i class="fa fa-book study-icon" style="left: 10%; animation-delay: 0s;"></i>
+    <i class="fa fa-graduation-cap study-icon" style="left: 20%; animation-delay: 4s;"></i>
+    <i class="fa fa-pencil-alt study-icon" style="left: 35%; animation-delay: 8s;"></i>
+    <i class="fa fa-brain study-icon" style="left: 50%; animation-delay: 2s;"></i>
+    <i class="fa fa-lightbulb study-icon" style="left: 65%; animation-delay: 12s;"></i>
+    <i class="fa fa-flask study-icon" style="left: 80%; animation-delay: 6s;"></i>
+    <i class="fa fa-calculator study-icon" style="left: 90%; animation-delay: 10s;"></i>
+    <i class="fa fa-book-open study-icon" style="left: 15%; animation-delay: 15s;"></i>
+    <i class="fa fa-atom study-icon" style="left: 45%; animation-delay: 18s;"></i>
+    <i class="fa fa-globe study-icon" style="left: 75%; animation-delay: 3s;"></i>
+</div>
+
+<div class="dashboard-wrapper">
+    <div class="row mb-4">
+        <div class="col">
+            <h2 class="font-weight-bold" style="color: #2c3e50;">
+                <span style="color: var(--primary-orange);">Edu-Xpress</span> Control Center
+            </h2>
+            <p class="text-muted">Interactive Management Environment</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card p-4 mb-4">
+                <div class="stat-label">Total Students</div>
+                <div class="display-4">{{ user_count }}</div>
+                <div class="small text-primary"><i class="fa fa-user-graduate mr-1"></i> Registered Users</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-4 mb-4">
+                <div class="stat-label">Materials</div>
+                <div class="display-4">{{ product_count }}</div>
+                <div class="small text-success"><i class="fa fa-book mr-1"></i> Inventory Items</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-4 mb-4">
+                <div class="stat-label">Pending Orders</div>
+                <div class="display-4">{{ order_count }}</div>
+                <div class="small text-warning"><i class="fa fa-shipping-fast mr-1"></i> To be Delivered</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card p-4 mb-4">
+                <div class="stat-label">Gross Revenue</div>
+                <div class="display-4">₹{{ "{:,.0f}".format(total_revenue) }}</div>
+                <div class="small text-danger"><i class="fa fa-chart-line mr-1"></i> Total Sales</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card h-100 p-4">
+                <h5 class="mb-4 font-weight-bold text-dark"><i class="fa fa-tasks mr-2 text-primary"></i> Quick Actions</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <a href="{{ url_for('product.create_view') }}" class="btn btn-quick btn-block shadow-sm">
+                            <i class="fa fa-plus-circle mb-2 d-block fa-lg text-primary"></i> Add Material
+                        </a>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <a href="{{ url_for('order.index_view') }}" class="btn btn-quick btn-block shadow-sm">
+                            <i class="fa fa-shopping-cart mb-2 d-block fa-lg text-warning"></i> View Orders
+                        </a>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <a href="{{ url_for('user.index_view') }}" class="btn btn-quick btn-block shadow-sm">
+                            <i class="fa fa-users mb-2 d-block fa-lg text-info"></i> User Directory
+                        </a>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <a href="/" class="btn btn-quick btn-block shadow-sm" target="_blank">
+                            <i class="fa fa-external-link-alt mb-2 d-block fa-lg text-dark"></i> Storefront
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card h-100 p-4">
+                <h5 class="mb-4 font-weight-bold text-dark"><i class="fa fa-info-circle mr-2 text-info"></i> Overview</h5>
+                <div class="list-group list-group-flush">
+                    <div class="list-group-item bg-transparent px-0 d-flex justify-content-between">
+                        <span class="text-muted">Database</span>
+                        <span class="text-success"><i class="fa fa-check-circle"></i> Connected</span>
+                    </div>
+                    <div class="list-group-item bg-transparent px-0 d-flex justify-content-between">
+                        <span class="text-muted">AI Integration</span>
+                        <span class="text-success"><i class="fa fa-check-circle"></i> Active</span>
+                    </div>
+                    <div class="list-group-item bg-transparent px-0 d-flex justify-content-between">
+                        <span class="text-muted">Environment</span>
+                        <span class="text-warning">Development</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -2,6 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:edu_xpress_frontend/widgets/book_bot.dart';
+import 'package:edu_xpress_frontend/services/api_config.dart';
+
+class ChatMessage {
+  final String text;
+  final bool isUser;
+  final DateTime timestamp;
+  final bool isError;
+  final List<dynamic>? products;
+
+  ChatMessage({
+    required this.text, 
+    required this.isUser, 
+    required this.timestamp,
+    this.isError = false,
+    this.products,
+  });
+}
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -16,19 +35,116 @@ class _ChatScreenState extends State<ChatScreen> {
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
-  final String baseUrl = "http://10.184.119.237:5000";
+  Map<int, int> cartQuantities = {};
 
   @override
   void initState() {
     super.initState();
-    // Welcome message with delay for a natural feel
+    _fetchCartState();
+    _fetchChatHistory(); // Load previous messages
+    
     Future.delayed(const Duration(milliseconds: 500), () {
-      _addMessage(ChatMessage(
-        text: "Hello! I'm your Edu-Xpress Assistant. How can I help you find books today?",
-        isUser: false,
-        timestamp: DateTime.now(),
-      ));
+      if (_messages.isEmpty) {
+        _addMessage(ChatMessage(
+          text: "Hello! I'm your Edu-Xpress Assistant. I can find books in our catalog or suggest others from across the web. How can I help?",
+          isUser: false,
+          timestamp: DateTime.now(),
+        ));
+      }
+
+      // Handle Prefill from arguments
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        if (args != null && args.containsKey('prefill')) {
+          _controller.text = args['prefill'];
+          _sendMessage();
+        }
+      });
     });
+  }
+
+  Future<void> _fetchChatHistory() async {
+    try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString("token");
+      if (token == null) return;
+
+      final res = await http.get(
+        Uri.parse("${ApiConfig.baseUrl}/chat/history"),
+        headers: {"Authorization": "Bearer $token"},
+      );
+
+      if (res.statusCode == 200) {
+        final List data = jsonDecode(res.body);
+        if (data.isNotEmpty) {
+          for (var h in data) {
+            _addMessage(ChatMessage(
+              text: h["message"],
+              isUser: true,
+              timestamp: h["timestamp"] != null ? DateTime.parse(h["timestamp"]) : DateTime.now(),
+            ));
+            _addMessage(ChatMessage(
+              text: h["reply"],
+              isUser: false,
+              timestamp: h["timestamp"] != null ? DateTime.parse(h["timestamp"]) : DateTime.now(),
+            ));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching chat history: $e");
+    }
+  }
+
+  Future<void> _fetchCartState() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString("token");
+    if (token == null) return;
+
+    try {
+      final res = await http.get(
+        Uri.parse("${ApiConfig.baseUrl}/cart"),
+        headers: {"Authorization": "Bearer $token"},
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final Map<int, int> newQtys = {};
+        for (var item in data["cart"]) {
+          newQtys[item["product_id"]] = item["quantity"];
+        }
+        if (mounted) setState(() => cartQuantities = newQtys);
+      }
+    } catch (e) {
+      debugPrint("Cart fetch error: $e");
+    }
+  }
+
+  Future<void> _updateCart(Map product, bool increase) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String? token = prefs.getString("token");
+    if (token == null) return;
+
+    int pid = product['id'];
+    try {
+      final url = increase ? "${ApiConfig.baseUrl}/cart/add" : "${ApiConfig.baseUrl}/cart/decrease/$pid";
+      final res = increase 
+        ? await http.post(Uri.parse(url), headers: {"Content-Type": "application/json", "Authorization": "Bearer $token"}, body: jsonEncode({"product_id": pid, "product_name": product['name'], "price": product['price']}))
+        : await http.post(Uri.parse(url), headers: {"Authorization": "Bearer $token"});
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        setState(() {
+          int current = cartQuantities[pid] ?? 0;
+          if (increase) {
+            cartQuantities[pid] = current + 1;
+          } else if (current > 0) {
+            if (current == 1) cartQuantities.remove(pid);
+            else cartQuantities[pid] = current - 1;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint("Cart update error: $e");
+    }
   }
 
   void _addMessage(ChatMessage message) {
@@ -65,9 +181,15 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollToBottom();
 
     try {
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      String? token = prefs.getString("token");
+
       final response = await http.post(
-        Uri.parse("$baseUrl/chat"),
-        headers: {"Content-Type": "application/json"},
+        Uri.parse("${ApiConfig.baseUrl}/chat"),
+        headers: {
+          "Content-Type": "application/json",
+          if (token != null) "Authorization": "Bearer $token",
+        },
         body: jsonEncode({"message": userText}),
       );
 
@@ -77,6 +199,7 @@ class _ChatScreenState extends State<ChatScreen> {
           text: data["reply"],
           isUser: false,
           timestamp: DateTime.now(),
+          products: data["products"],
         ));
       } else {
         _addMessage(ChatMessage(
@@ -116,105 +239,242 @@ class _ChatScreenState extends State<ChatScreen> {
           icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 20),
           onPressed: () => Navigator.of(context).pop(),
         ),
-        title: const Column(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              "Edu-Xpress Assistant",
-              style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            const BookBot(size: 30, state: BookBotState.idle),
+            const SizedBox(width: 10),
+            const Column(
               children: [
-                CircleAvatar(radius: 3, backgroundColor: Colors.green),
-                SizedBox(width: 4),
-                Text("Always here to help", style: TextStyle(color: Colors.white70, fontSize: 10)),
+                Text(
+                  "Edu-Xpress Assistant",
+                  style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(radius: 3, backgroundColor: Colors.green),
+                    SizedBox(width: 4),
+                    Text("Online", style: TextStyle(color: Colors.white70, fontSize: 10)),
+                  ],
+                )
               ],
-            )
+            ),
           ],
         ),
       ),
-      body: Column(
+      body: Stack(
         children: [
-          Expanded(
-            child: AnimatedList(
-              key: _listKey,
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-              initialItemCount: _messages.length,
-              itemBuilder: (context, index, animation) {
-                return FadeTransition(
-                  opacity: animation,
-                  child: SlideTransition(
-                    position: animation.drive(Tween(
-                      begin: const Offset(0, 0.2),
-                      end: Offset.zero,
-                    ).chain(CurveTween(curve: Curves.easeOutCubic))),
-                    child: _buildChatBubble(_messages[index], theme),
-                  ),
-                );
-              },
-            ),
+          Column(
+            children: [
+              Expanded(
+                child: AnimatedList(
+                  key: _listKey,
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+                  initialItemCount: _messages.length,
+                  itemBuilder: (context, index, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: animation.drive(Tween(
+                          begin: const Offset(0, 0.2),
+                          end: Offset.zero,
+                        ).chain(CurveTween(curve: Curves.easeOutCubic))),
+                        child: _buildChatBubble(_messages[index], theme),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              _buildInputArea(theme),
+            ],
           ),
           if (_isLoading)
-            const Padding(
-              padding: EdgeInsets.only(left: 20, bottom: 15),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: EnhancedTypingIndicator(),
-              ),
+            Positioned(
+              left: 20,
+              bottom: 85,
+              child: _buildTypingMascot(),
             ),
-          _buildInputArea(theme),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTypingMascot() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          BookBot(size: 25, state: BookBotState.idle),
+          SizedBox(width: 8),
+          Text(
+            "Edu-AI is typing...",
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.deepOrange),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildChatBubble(ChatMessage message, ThemeData theme) {
-    return Align(
-      alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+    bool isUser = message.isUser;
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Column(
-        crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
         children: [
-          Container(
-            constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-            margin: const EdgeInsets.symmetric(vertical: 4),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: message.isUser 
-                  ? theme.colorScheme.primary 
-                  : (message.isError ? Colors.red.withOpacity(0.1) : theme.cardColor),
-              borderRadius: BorderRadius.only(
-                topLeft: const Radius.circular(20),
-                topRight: const Radius.circular(20),
-                bottomLeft: Radius.circular(message.isUser ? 20 : 0),
-                bottomRight: Radius.circular(message.isUser ? 0 : 20),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                )
+          Row(
+            mainAxisAlignment: isUser ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isUser) ...[
+                const BookBot(size: 25, state: BookBotState.idle),
+                const SizedBox(width: 8),
               ],
-              border: message.isError ? Border.all(color: Colors.red.withOpacity(0.3)) : null,
-            ),
-            child: Text(
-              message.text,
-              style: TextStyle(
-                color: message.isUser ? Colors.white : (message.isError ? Colors.red[300] : theme.textTheme.bodyMedium?.color),
-                fontSize: 15,
-                height: 1.4,
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.7),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isUser 
+                            ? theme.colorScheme.primary 
+                            : (message.isError ? Colors.red.withOpacity(0.1) : theme.cardColor),
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(20),
+                          topRight: const Radius.circular(20),
+                          bottomLeft: Radius.circular(isUser ? 20 : 0),
+                          bottomRight: Radius.circular(isUser ? 0 : 20),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          )
+                        ],
+                        border: message.isError ? Border.all(color: Colors.red.withOpacity(0.3)) : null,
+                      ),
+                      child: Text(
+                        message.text,
+                        style: TextStyle(
+                          color: isUser ? Colors.white : (message.isError ? Colors.red[300] : theme.textTheme.bodyMedium?.color),
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (isUser) ...[
+                const SizedBox(width: 8),
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: theme.colorScheme.primary.withOpacity(0.2),
+                  child: Icon(Icons.person, size: 18, color: theme.colorScheme.primary),
+                ),
+              ],
+            ],
+          ),
+          if (message.products != null && message.products!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(left: 33, top: 10),
+              child: SizedBox(
+                height: 180,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: message.products!.length,
+                  itemBuilder: (context, i) => _buildProductCard(message.products![i], theme),
+                ),
               ),
             ),
-          ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: EdgeInsets.only(
+              left: isUser ? 0 : 40, 
+              right: isUser ? 40 : 0, 
+              bottom: 2,
+            ),
             child: Text(
               DateFormat('hh:mm a').format(message.timestamp),
               style: TextStyle(color: theme.hintColor.withOpacity(0.5), fontSize: 9),
             ),
           ),
-          const SizedBox(height: 12),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductCard(dynamic product, ThemeData theme) {
+    int pid = product['id'];
+    int qty = cartQuantities[pid] ?? 0;
+
+    return Container(
+      width: 140,
+      margin: const EdgeInsets.only(right: 12),
+      decoration: BoxDecoration(
+        color: theme.cardColor,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.grey.withOpacity(0.2)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
+              child: Image.network(
+                product['image'] != null
+                    ? (product['image'].toString().startsWith("http") ? product['image'] : "${ApiConfig.baseUrl}/uploads/product_images/${product['image']}")
+                    : "",
+                width: double.infinity,
+                fit: BoxFit.cover,
+                errorBuilder: (c, e, s) => const Center(child: Icon(Icons.book, color: Colors.deepOrange)),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(product['name'], style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                Text("₹${product['price']}", style: const TextStyle(fontSize: 10, color: Colors.deepOrange, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                qty == 0 
+                  ? SizedBox(
+                      width: double.infinity,
+                      height: 28,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(padding: EdgeInsets.zero),
+                        onPressed: () => _updateCart(product, true),
+                        child: const Text("Add", style: TextStyle(fontSize: 10)),
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        InkWell(onTap: () => _updateCart(product, false), child: const Icon(Icons.remove_circle_outline, size: 18, color: Colors.deepOrange)),
+                        Text("$qty", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        InkWell(onTap: () => _updateCart(product, true), child: const Icon(Icons.add_circle_outline, size: 18, color: Colors.deepOrange)),
+                      ],
+                    ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -247,7 +507,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   controller: _controller,
                   style: const TextStyle(fontSize: 15),
                   decoration: InputDecoration(
-                    hintText: "Ask about books...",
+                    hintText: "Ask about books or orders...",
                     border: InputBorder.none,
                     hintStyle: TextStyle(color: theme.hintColor),
                   ),
@@ -271,83 +531,6 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       ),
-    );
-  }
-}
-
-class ChatMessage {
-  final String text;
-  final bool isUser;
-  final DateTime timestamp;
-  final bool isError;
-
-  ChatMessage({
-    required this.text, 
-    required this.isUser, 
-    required this.timestamp,
-    this.isError = false,
-  });
-}
-
-class EnhancedTypingIndicator extends StatefulWidget {
-  const EnhancedTypingIndicator({super.key});
-
-  @override
-  State<EnhancedTypingIndicator> createState() => _EnhancedTypingIndicatorState();
-}
-
-class _EnhancedTypingIndicatorState extends State<EnhancedTypingIndicator> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          "Edu-Xpress AI is typing",
-          style: TextStyle(color: theme.hintColor, fontSize: 12, fontWeight: FontWeight.w500),
-        ),
-        const SizedBox(width: 8),
-        ...List.generate(3, (index) {
-          return AnimatedBuilder(
-            animation: _controller,
-            builder: (context, child) {
-              final double offset = index * 0.2;
-              final double progress = (_controller.value + offset) % 1.0;
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                width: 4,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Color.lerp(
-                    Colors.grey[300],
-                    theme.colorScheme.primary,
-                    progress,
-                  ),
-                  shape: BoxShape.circle,
-                ),
-              );
-            },
-          );
-        }),
-      ],
     );
   }
 }

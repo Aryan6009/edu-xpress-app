@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:lottie/lottie.dart';
 import 'package:edu_xpress_frontend/widgets/chatbot_fab.dart';
+import 'package:edu_xpress_frontend/services/api_config.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -20,7 +21,7 @@ class _SearchScreenState extends State<SearchScreen> {
     if (query.trim().isEmpty) return;
 
     setState(() => isLoading = true);
-    final res = await http.get(Uri.parse('http://10.184.119.237:5000/search?q=$query'));
+    final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/search?q=$query'));
     final data = jsonDecode(res.body);
 
     setState(() {

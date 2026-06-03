@@ -7,16 +7,18 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import 'package:edu_xpress_frontend/services/api_config.dart';
 
 class MapPickerScreen extends StatefulWidget {
-  const MapPickerScreen({super.key});
+  final LatLng? initialCenter;
+  const MapPickerScreen({super.key, this.initialCenter});
 
   @override
   State<MapPickerScreen> createState() => _MapPickerScreenState();
 }
 
 class _MapPickerScreenState extends State<MapPickerScreen> {
-  LatLng _selectedLocation = const LatLng(26.8467, 80.9462); // Default: Lucknow
+  late LatLng _selectedLocation;
   String _address = "Select a location";
   String _currentCity = ""; 
   final MapController _mapController = MapController();
@@ -34,8 +36,13 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedLocation = widget.initialCenter ?? const LatLng(26.8467, 80.9462);
     _addressController.text = _address;
-    _getCurrentLocation();
+    if (widget.initialCenter == null) {
+      _getCurrentLocation();
+    } else {
+      _reverseGeocode(_selectedLocation);
+    }
   }
 
   @override
@@ -257,7 +264,7 @@ class _MapPickerScreenState extends State<MapPickerScreen> {
 
     setState(() => _isLoading = true);
     final response = await http.post(
-      Uri.parse("http://10.184.119.237:5000/save-address"),
+      Uri.parse("${ApiConfig.baseUrl}/save-address"),
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer $token"
